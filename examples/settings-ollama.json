@@ -1,0 +1,6 @@
+{
+  "provider": "openai",
+  "apiKey": "ollama",
+  "baseUrl": "http://localhost:11434/v1",
+  "model": "llama2"
+}

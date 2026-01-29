@@ -1,0 +1,6 @@
+{
+  "provider": "anthropic",
+  "apiKey": "sk-ant-your-key-here",
+  "baseUrl": "https://api.anthropic.com/v1",
+  "model": "claude-3-sonnet-20240229"
+}

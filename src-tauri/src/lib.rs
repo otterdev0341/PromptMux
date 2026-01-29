@@ -1,0 +1,41 @@
+mod models;
+mod state;
+mod commands;
+
+use state::AppState;
+use tauri::Manager;
+
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+pub fn run() {
+    tauri::Builder::default()
+        .setup(|app| {
+            // Get the app data directory
+            let data_dir = app.path().app_data_dir()
+                .map_err(|e| format!("Failed to get app data dir: {}", e))?;
+            
+            // Initialize app state
+            let app_state = AppState::new(data_dir)
+                .map_err(|e| format!("Failed to initialize app state: {}", e))?;
+            
+            // Manage the app state
+            app.manage(app_state);
+            
+            Ok(())
+        })
+        .invoke_handler(tauri::generate_handler![
+            commands::get_project,
+            commands::create_section,
+            commands::update_section_name,
+            commands::delete_section,
+            commands::create_topic,
+            commands::update_topic_content,
+            commands::update_topic_name,
+            commands::delete_topic,
+            commands::reorder_item,
+            commands::get_merged_output,
+            commands::refine_with_llm,
+            commands::get_platform,
+        ])
+        .run(tauri::generate_context!())
+        .expect("error while running tauri application");
+}

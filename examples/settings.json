@@ -1,0 +1,6 @@
+{
+  "provider": "openai",
+  "apiKey": "your-api-key-here",
+  "baseUrl": "https://api.openai.com/v1",
+  "model": "gpt-4"
+}
