@@ -24,10 +24,32 @@ export interface Project {
   updated_at: string;
 }
 
-export const projectStore = writable<Project | null>(null);
+export interface Workspace {
+  projects: Project[];
+  active_project_id: string;
+  created_at: string;
+  updated_at: string;
+}
+
+// Workspace store containing all projects
+export const workspaceStore = writable<Workspace | null>(null);
+
+// Active project (derived from workspace)
+export const projectStore = derived(
+  workspaceStore,
+  ($workspace) => {
+    if (!$workspace) return null;
+    return $workspace.projects.find(p => p.id === $workspace.active_project_id) || null;
+  }
+);
+
+// Individual active ID stores (unchanged for compatibility)
 export const activeTopicId = writable<string | null>(null);
 export const activeSectionId = writable<string | null>(null);
 export const platform = writable<string>('unknown');
+
+// Leader key state for keyboard shortcuts
+export const isLeaderKeyActive = writable<boolean>(false);
 
 export const mergedOutput = derived(
   projectStore,
@@ -62,12 +84,64 @@ export const activeTopic = derived(
   }
 );
 
-export async function loadProject(): Promise<void> {
+export async function loadWorkspace(): Promise<void> {
   try {
-    const project = await invoke<Project>('get_project');
-    projectStore.set(project);
+    const workspace = await invoke<Workspace>('get_workspace');
+    workspaceStore.set(workspace);
   } catch (error) {
-    console.error('Failed to load project:', error);
+    console.error('Failed to load workspace:', error);
+    throw error;
+  }
+}
+
+export async function loadProject(): Promise<void> {
+  // Load workspace instead of individual project
+  await loadWorkspace();
+}
+
+export async function createProject(name: string): Promise<Project> {
+  try {
+    const project = await invoke<Project>('create_project', { name });
+    await loadWorkspace();
+    return project;
+  } catch (error) {
+    console.error('Failed to create project:', error);
+    throw error;
+  }
+}
+
+export async function deleteProject(projectId: string): Promise<void> {
+  try {
+    await invoke('delete_project', { projectId });
+    await loadWorkspace();
+  } catch (error) {
+    console.error('Failed to delete project:', error);
+    throw error;
+  }
+}
+
+export async function switchProject(projectId: string): Promise<Project> {
+  try {
+    const project = await invoke<Project>('switch_project', { projectId });
+    await loadWorkspace();
+    
+    // Clear active selections when switching projects
+    activeSectionId.set(null);
+    activeTopicId.set(null);
+    
+    return project;
+  } catch (error) {
+    console.error('Failed to switch project:', error);
+    throw error;
+  }
+}
+
+export async function renameProject(projectId: string, name: string): Promise<void> {
+  try {
+    await invoke('rename_project', { projectId, name });
+    await loadWorkspace();
+  } catch (error) {
+    console.error('Failed to rename project:', error);
     throw error;
   }
 }

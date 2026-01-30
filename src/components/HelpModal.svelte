@@ -28,12 +28,12 @@
         <h3>Global Shortcuts (Ctrl+b then...)</h3>
         <table class="shortcuts-table">
           <tr>
-            <td><kbd>?</kbd></td>
-            <td>Show/hide this help modal</td>
+            <td><kbd>s</kbd></td>
+            <td>Create new section</td>
           </tr>
           <tr>
-            <td><kbd>s</kbd></td>
-            <td>Focus sidebar</td>
+            <td><kbd>?</kbd></td>
+            <td>Show/hide this help modal</td>
           </tr>
           <tr>
             <td><kbd>e</kbd></td>
@@ -46,6 +46,54 @@
           <tr>
             <td><kbd>r</kbd></td>
             <td>Refine merged output with LLM</td>
+          </tr>
+          <tr>
+            <td><kbd>p</kbd></td>
+            <td>Toggle project switcher dropdown</td>
+          </tr>
+          <tr>
+            <td><kbd>n</kbd></td>
+            <td>Create new project</td>
+          </tr>
+          <tr>
+            <td><kbd>[</kbd> / <kbd>]</kbd></td>
+            <td>Cycle to previous/next project</td>
+          </tr>
+        </table>
+      </section>
+
+      <section>
+        <h3>Quick Shortcuts</h3>
+        <table class="shortcuts-table">
+          <tr>
+            <td><kbd>Ctrl+Shift+S</kbd></td>
+            <td>Create new section</td>
+          </tr>
+          <tr>
+            <td><kbd>Ctrl+Shift+P</kbd></td>
+            <td>Cycle to next project</td>
+          </tr>
+          <tr>
+            <td><kbd>Ctrl+Alt+N</kbd></td>
+            <td>Create new project</td>
+          </tr>
+          <tr>
+            <td><kbd>F2</kbd></td>
+            <td>Rename current section or topic</td>
+          </tr>
+        </table>
+      </section>
+
+      <section>
+        <h3>Item Management</h3>
+        <table class="shortcuts-table">
+          <tr>
+            <td><kbd>F2</kbd></td>
+            <td>Rename current section or topic</td>
+          </tr>
+          <tr>
+            <td><kbd>n</kbd> (in sidebar)</td>
+            <td>Create new topic (in current section)</td>
           </tr>
         </table>
       </section>
@@ -76,6 +124,10 @@
           <tr>
             <td><kbd>Ctrl+Shift+j</kbd> / <kbd>Ctrl+Shift+k</kbd></td>
             <td>Move item down/up</td>
+          </tr>
+          <tr>
+            <td><kbd>Mouse drag</kbd></td>
+            <td>Drag and drop to reorder sections/topics</td>
           </tr>
         </table>
       </section>

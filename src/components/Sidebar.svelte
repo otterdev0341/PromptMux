@@ -11,6 +11,7 @@
     updateSectionName,
     updateTopicName,
     reorderItem,
+    isLeaderKeyActive,
     type Section,
     type Topic
   } from '../stores/projectStore';
@@ -26,6 +27,10 @@
   let editingItemId: string | null = null;
   let editingName = '';
   let inputElement: HTMLInputElement;
+
+  // Drag and drop state
+  let draggedItem: { id: string; type: 'section' | 'topic'; sectionId?: string } | null = null;
+  let dragOverItem: { id: string; type: 'section' | 'topic'; sectionId?: string } | null = null;
 
   $: sections = $projectStore?.sections.sort((a, b) => a.order_index - b.order_index) || [];
 
@@ -78,6 +83,11 @@
   function handleKeydown(e: KeyboardEvent) {
     if (!focused) return;
 
+    // Focus on active item
+    if (e.key === '\\') {
+      e.preventDefault();
+      focusOnActiveItem();
+    }
     // Navigation
     if (e.key === 'j') {
       e.preventDefault();
@@ -119,6 +129,11 @@
       } else if (item.type === 'topic') {
         activeSectionId.set(item.sectionId!);
         activeTopicId.set(item.id);
+        // Make sure the parent section is expanded
+        if (!expandedSections.has(item.sectionId!)) {
+          expandedSections.add(item.sectionId!);
+          expandedSections = new Set(expandedSections);
+        }
         // Focus the editor
         document.getElementById('topic-editor')?.focus();
       }
@@ -164,11 +179,37 @@
     else if (e.ctrlKey && e.shiftKey && e.key === 'J') {
       e.preventDefault();
       const item = flatItems[highlightedIndex];
-      reorderItem(item.type, item.id, highlightedIndex + 2);
+      
+      if (item.type === 'section') {
+        // Reorder section within sections array
+        const currentSectionIndex = sections.findIndex(s => s.id === item.id);
+        // Add 2 because Rust backend subtracts 1 when new_index > current_index
+        reorderItem(item.type, item.id, currentSectionIndex + 2);
+      } else if (item.type === 'topic') {
+        // Reorder topic within its section's topics array
+        const section = sections.find(s => s.id === item.sectionId);
+        if (section) {
+          const currentTopicIndex = section.topics.findIndex(t => t.id === item.id);
+          // Add 2 because Rust backend subtracts 1 when new_index > current_index
+          reorderItem(item.type, item.id, currentTopicIndex + 2);
+        }
+      }
     } else if (e.ctrlKey && e.shiftKey && e.key === 'K') {
       e.preventDefault();
       const item = flatItems[highlightedIndex];
-      reorderItem(item.type, item.id, highlightedIndex - 1);
+      
+      if (item.type === 'section') {
+        // Reorder section within sections array
+        const currentSectionIndex = sections.findIndex(s => s.id === item.id);
+        reorderItem(item.type, item.id, currentSectionIndex - 1);
+      } else if (item.type === 'topic') {
+        // Reorder topic within its section's topics array
+        const section = sections.find(s => s.id === item.sectionId);
+        if (section) {
+          const currentTopicIndex = section.topics.findIndex(t => t.id === item.id);
+          reorderItem(item.type, item.id, currentTopicIndex - 1);
+        }
+      }
     }
     // Rename with F2
     else if (e.key === 'F2') {
@@ -219,6 +260,30 @@
     document.querySelector<HTMLElement>('.sidebar')?.focus();
   }
 
+  function focusOnActiveItem() {
+    // Find and highlight the currently active section or topic
+    let targetId: string | null = null;
+    
+    if ($activeTopicId) {
+      targetId = $activeTopicId;
+    } else if ($activeSectionId) {
+      targetId = $activeSectionId;
+    }
+    
+    if (targetId) {
+      const newIndex = flatItems.findIndex(i => i.id === targetId);
+      if (newIndex !== -1) {
+        highlightedIndex = newIndex;
+        // Ensure the section is expanded if it's a topic
+        const item = flatItems[newIndex];
+        if (item.type === 'topic' && item.sectionId && !expandedSections.has(item.sectionId)) {
+          expandedSections.add(item.sectionId);
+          expandedSections = new Set(expandedSections);
+        }
+      }
+    }
+  }
+
   function handleInputKeydown(e: KeyboardEvent) {
     e.stopPropagation(); // Prevent Sidebar navigation while typing
     
@@ -230,6 +295,12 @@
   }
 
   function selectItem(item: typeof flatItems[0]) {
+    // Update highlighted index to match the selected item
+    const newIndex = flatItems.findIndex(i => i.id === item.id);
+    if (newIndex !== -1) {
+      highlightedIndex = newIndex;
+    }
+    
     if (item.type === 'section') {
       activeSectionId.set(item.id);
       activeTopicId.set(null);
@@ -242,12 +313,20 @@
     } else if (item.type === 'topic') {
       activeSectionId.set(item.sectionId!);
       activeTopicId.set(item.id);
+      // Make sure the parent section is expanded
+      if (!expandedSections.has(item.sectionId!)) {
+        expandedSections.add(item.sectionId!);
+        expandedSections = new Set(expandedSections);
+      }
       document.getElementById('topic-editor')?.focus();
     }
   }
 
-  function getIcon(type: 'section' | 'topic') {
-    return type === 'section' ? '📁' : '📄';
+  function getIcon(type: 'section' | 'topic', isExpanded: boolean = false) {
+    if (type === 'section') {
+      return isExpanded ? '📓' : '📒'; // Notebook icons for sections
+    }
+    return '📄'; // Document icon for topics
   }
 
   function promptDelete(id: string, type: 'section' | 'topic', name: string) {
@@ -271,6 +350,109 @@
   function cancelDelete() {
     showDeleteModal = false;
     itemToDelete = null;
+  }
+
+  // Drag and drop handlers
+  function handleDragStart(e: DragEvent, item: typeof flatItems[0]) {
+    draggedItem = item;
+    if (e.dataTransfer) {
+      e.dataTransfer.setData('text/plain', item.id);
+      e.dataTransfer.effectAllowed = 'move';
+    }
+  }
+
+  function handleDragOver(e: DragEvent, item: typeof flatItems[0]) {
+    e.preventDefault();
+    e.dataTransfer!.dropEffect = 'move';
+    
+    // Only allow dragging within same type and section
+    if (draggedItem) {
+      if (draggedItem.type === item.type) {
+        if (draggedItem.type === 'topic') {
+          // Topics can only be reordered within the same section
+          if (draggedItem.sectionId === item.sectionId) {
+            dragOverItem = item;
+          } else {
+            dragOverItem = null;
+          }
+        } else {
+          // Sections can be reordered freely
+          dragOverItem = item;
+        }
+      }
+    }
+  }
+
+  function handleDragLeave(e: DragEvent) {
+    // Clear drag over state when leaving the item
+    dragOverItem = null;
+  }
+
+  async function handleDrop(e: DragEvent, targetItem: typeof flatItems[0]) {
+    e.preventDefault();
+    
+    if (!draggedItem || !dragOverItem || draggedItem.id === targetItem.id) {
+      draggedItem = null;
+      dragOverItem = null;
+      return;
+    }
+
+    // Ensure we're dropping on a valid target
+    if (draggedItem.type !== targetItem.type) {
+      draggedItem = null;
+      dragOverItem = null;
+      return;
+    }
+
+    // For topics, ensure they're in the same section
+    if (draggedItem.type === 'topic' && draggedItem.sectionId !== targetItem.sectionId) {
+      draggedItem = null;
+      dragOverItem = null;
+      return;
+    }
+
+    try {
+      if (draggedItem.type === 'section') {
+        // Reorder sections
+        const currentIndex = sections.findIndex(s => s.id === draggedItem.id);
+        const targetIndex = sections.findIndex(s => s.id === targetItem.id);
+        
+        if (currentIndex !== -1 && targetIndex !== -1) {
+          // Calculate new index with Rust backend adjustment
+          let newIndex = targetIndex;
+          if (newIndex > currentIndex) {
+            newIndex += 1; // Account for Rust backend's -1 adjustment
+          }
+          await reorderItem('section', draggedItem.id, newIndex);
+        }
+      } else if (draggedItem.type === 'topic') {
+        // Reorder topics within the same section
+        const section = sections.find(s => s.id === draggedItem.sectionId);
+        if (section) {
+          const currentIndex = section.topics.findIndex(t => t.id === draggedItem.id);
+          const targetIndex = section.topics.findIndex(t => t.id === targetItem.id);
+          
+          if (currentIndex !== -1 && targetIndex !== -1) {
+            // Calculate new index with Rust backend adjustment
+            let newIndex = targetIndex;
+            if (newIndex > currentIndex) {
+              newIndex += 1; // Account for Rust backend's -1 adjustment
+            }
+            await reorderItem('topic', draggedItem.id, newIndex);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Failed to reorder item:', error);
+    }
+
+    draggedItem = null;
+    dragOverItem = null;
+  }
+
+  function handleDragEnd() {
+    draggedItem = null;
+    dragOverItem = null;
   }
 
   export let id: string = '';
@@ -299,7 +481,7 @@
   on:blur={handleBlur}
 >
   <div class="sidebar-header">
-    <h2>PromptMux</h2>
+    <h2>Sections & Topics</h2>
     <span class="keyboard-hint">Press Ctrl+b q for help</span>
   </div>
 
@@ -307,6 +489,9 @@
     {#each sections as section (section.id)}
       {@const isExpanded = expandedSections.has(section.id)}
       {@const isActive = $activeSectionId === section.id}
+      {@const sectionItem = { id: section.id, type: 'section', name: section.name }}
+      {@const isDragging = draggedItem?.id === section.id}
+      {@const isDragOver = dragOverItem?.id === section.id}
       
       <div class="section-item">
         <div class="item-row-wrapper">
@@ -314,9 +499,18 @@
             class="item-row"
             class:highlighted={flatItems[highlightedIndex]?.id === section.id}
             class:active={isActive}
+            class:dragging={isDragging}
+            class:drag-over={isDragOver}
+            draggable="true"
+            on:dragstart={(e) => handleDragStart(e, sectionItem)}
+            on:dragover={(e) => handleDragOver(e, sectionItem)}
+            on:dragleave={handleDragLeave}
+            on:drop={(e) => handleDrop(e, sectionItem)}
+            on:dragend={handleDragEnd}
             on:click={() => selectItem({ id: section.id, type: 'section', name: section.name })}
           >
-            <span class="icon">{isExpanded ? '📂' : '📁'}</span>
+            <span class="drag-handle">⋮⋮</span>
+            <span class="icon">{getIcon('section', isExpanded)}</span>
             {#if editingItemId === section.id}
               <input
                 bind:this={inputElement}
@@ -345,12 +539,23 @@
           <div class="topics-list">
             {#each section.topics.sort((a, b) => a.order_index - b.order_index) as topic (topic.id)}
               {@const isTopicActive = $activeTopicId === topic.id}
+              {@const topicItem = { id: topic.id, type: 'topic', name: topic.name, sectionId: section.id }}
+              {@const isTopicDragging = draggedItem?.id === topic.id}
+              {@const isTopicDragOver = dragOverItem?.id === topic.id}
               
               <div class="item-row-wrapper">
                 <div
                   class="item-row topic"
                   class:highlighted={flatItems[highlightedIndex]?.id === topic.id}
                   class:active={isTopicActive}
+                  class:dragging={isTopicDragging}
+                  class:drag-over={isTopicDragOver}
+                  draggable="true"
+                  on:dragstart={(e) => handleDragStart(e, topicItem)}
+                  on:dragover={(e) => handleDragOver(e, topicItem)}
+                  on:dragleave={handleDragLeave}
+                  on:drop={(e) => handleDrop(e, topicItem)}
+                  on:dragend={handleDragEnd}
                   on:click={() => selectItem({
                     id: topic.id,
                     type: 'topic',
@@ -358,6 +563,7 @@
                     sectionId: section.id
                   })}
                 >
+                  <span class="drag-handle">⋮⋮</span>
                   <span class="icon indent">{getIcon('topic')}</span>
                   {#if editingItemId === topic.id}
                     <input
@@ -626,5 +832,31 @@
     border-radius: 0.25rem;
     outline: none;
     min-width: 0;
+  }
+
+  .drag-handle {
+    margin-right: 0.25rem;
+    font-size: 0.75rem;
+    color: #718096;
+    cursor: grab;
+    user-select: none;
+  }
+
+  .drag-handle:active {
+    cursor: grabbing;
+  }
+
+  .item-row.dragging {
+    opacity: 0.5;
+    background-color: #2d3748;
+  }
+
+  .item-row.drag-over {
+    background-color: #4299e1;
+    border-top: 2px solid #63b3ed;
+  }
+
+  .item-row.drag-over .drag-handle {
+    color: #e2e8f0;
   }
 </style>

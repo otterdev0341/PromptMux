@@ -2,6 +2,85 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Workspace {
+    pub projects: Vec<Project>,
+    pub active_project_id: String,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+impl Workspace {
+    pub fn new() -> Self {
+        let now = chrono::Utc::now().to_rfc3339();
+        // Create a default project
+        let default_project = Project::new("My Project".to_string());
+        let active_id = default_project.id.clone();
+        
+        Workspace {
+            projects: vec![default_project],
+            active_project_id: active_id,
+            created_at: now.clone(),
+            updated_at: now,
+        }
+    }
+
+    pub fn add_project(&mut self, mut project: Project) -> String {
+        self.projects.push(project.clone());
+        self.updated_at = chrono::Utc::now().to_rfc3339();
+        project.id.clone()
+    }
+
+    pub fn remove_project(&mut self, project_id: &str) -> Result<(), String> {
+        if self.projects.len() <= 1 {
+            return Err("Cannot delete the last project".to_string());
+        }
+        
+        let original_len = self.projects.len();
+        self.projects.retain(|p| p.id != project_id);
+        
+        if self.projects.len() < original_len {
+            // If we deleted the active project, switch to another
+            if self.active_project_id == project_id {
+                self.active_project_id = self.projects.first()
+                    .ok_or("No projects available")?
+                    .id
+                    .clone();
+            }
+            self.updated_at = chrono::Utc::now().to_rfc3339();
+            Ok(())
+        } else {
+            Err(format!("Project with id {} not found", project_id))
+        }
+    }
+
+    pub fn get_active_project(&self) -> Option<&Project> {
+        self.projects.iter().find(|p| p.id == self.active_project_id)
+    }
+
+    pub fn get_active_project_mut(&mut self) -> Option<&mut Project> {
+        self.projects.iter_mut().find(|p| p.id == self.active_project_id)
+    }
+
+    pub fn get_project(&self, project_id: &str) -> Option<&Project> {
+        self.projects.iter().find(|p| p.id == project_id)
+    }
+
+    pub fn get_project_mut(&mut self, project_id: &str) -> Option<&mut Project> {
+        self.projects.iter_mut().find(|p| p.id == project_id)
+    }
+
+    pub fn set_active_project(&mut self, project_id: &str) -> Result<(), String> {
+        if self.projects.iter().any(|p| p.id == project_id) {
+            self.active_project_id = project_id.to_string();
+            self.updated_at = chrono::Utc::now().to_rfc3339();
+            Ok(())
+        } else {
+            Err(format!("Project with id {} not found", project_id))
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Project {
     pub id: String,
     pub name: String,

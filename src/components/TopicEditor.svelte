@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
   import { createEventDispatcher } from 'svelte';
-  import { activeTopic, updateTopicContent, activeTopicId, projectStore } from '../stores/projectStore';
+  import { activeTopic, updateTopicContent, activeTopicId, projectStore, workspaceStore } from '../stores/projectStore';
   import { debounce } from '../utils/debounce';
 
   const dispatch = createEventDispatcher();
@@ -83,18 +83,30 @@
     editorContent = target.value;
     
     if ($activeTopicId) {
-      // Optimistically update the store for real-time merged view preview
-      projectStore.update(project => {
-        if (!project) return null;
-        const newProject = { ...project };
-        for (const section of newProject.sections) {
-          const topic = section.topics.find(t => t.id === $activeTopicId);
-          if (topic) {
-            topic.content = editorContent;
-            break;
-          }
-        }
-        return newProject;
+      // Optimistically update the workspace store for real-time merged view preview
+      // Note: projectStore is now derived (read-only), so we update workspaceStore instead
+      workspaceStore.update(workspace => {
+        if (!workspace) return null;
+        
+        const projectIndex = workspace.projects.findIndex(
+          p => p.id === workspace.active_project_id
+        );
+        
+        if (projectIndex === -1) return workspace;
+        
+        const newWorkspace = { ...workspace };
+        newWorkspace.projects = [...workspace.projects];
+        newWorkspace.projects[projectIndex] = { ...workspace.projects[projectIndex] };
+        newWorkspace.projects[projectIndex].sections = workspace.projects[projectIndex].sections.map(section => ({
+          ...section,
+          topics: section.topics.map(topic => 
+            topic.id === $activeTopicId 
+              ? { ...topic, content: editorContent }
+              : topic
+          )
+        }));
+        
+        return newWorkspace;
       });
       
       debouncedSave($activeTopicId, editorContent);

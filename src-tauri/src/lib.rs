@@ -23,7 +23,12 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            commands::get_workspace,
             commands::get_project,
+            commands::create_project,
+            commands::delete_project,
+            commands::switch_project,
+            commands::rename_project,
             commands::create_section,
             commands::update_section_name,
             commands::delete_section,

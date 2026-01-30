@@ -1,4 +1,4 @@
-use crate::models::{Project, Section, Topic};
+use crate::models::{Workspace, Project, Section, Topic};
 use crate::state::AppState;
 use std::fs;
 use std::path::PathBuf;
@@ -10,22 +10,107 @@ pub fn get_platform() -> String {
     std::env::consts::OS.to_string()
 }
 
+/// Get the workspace with all projects
+#[tauri::command]
+pub fn get_workspace(state: State<AppState>) -> Result<Workspace, String> {
+    let workspace = state.workspace.lock().unwrap();
+    Ok(workspace.clone())
+}
+
+/// Get the active project
 #[tauri::command]
 pub fn get_project(state: State<AppState>) -> Result<Project, String> {
-    let project = state.project.lock().unwrap();
-    Ok(project.clone())
+    let workspace = state.workspace.lock().unwrap();
+    workspace
+        .get_active_project()
+        .ok_or("No active project found".to_string())
+        .map(|p| p.clone())
+}
+
+/// Create a new project
+#[tauri::command]
+pub fn create_project(state: State<AppState>, name: String) -> Result<Project, String> {
+    let mut workspace = state.workspace.lock().unwrap();
+    let project = Project::new(name);
+    let project_clone = project.clone();
+    workspace.add_project(project);
+    
+    // Save to file
+    if let Err(e) = save_workspace(&workspace, &state.data_dir) {
+        return Err(format!("Failed to save workspace: {}", e));
+    }
+    
+    Ok(project_clone)
+}
+
+/// Delete a project
+#[tauri::command]
+pub fn delete_project(state: State<AppState>, project_id: String) -> Result<(), String> {
+    let mut workspace = state.workspace.lock().unwrap();
+    workspace.remove_project(&project_id)?;
+    
+    // Save to file
+    if let Err(e) = save_workspace(&workspace, &state.data_dir) {
+        return Err(format!("Failed to save workspace: {}", e));
+    }
+    
+    Ok(())
+}
+
+/// Switch to a different project
+#[tauri::command]
+pub fn switch_project(state: State<AppState>, project_id: String) -> Result<Project, String> {
+    let mut workspace = state.workspace.lock().unwrap();
+    workspace.set_active_project(&project_id)?;
+    
+    let project = workspace.get_active_project()
+        .ok_or("Failed to get active project".to_string())?
+        .clone();
+    
+    // Save to file
+    if let Err(e) = save_workspace(&workspace, &state.data_dir) {
+        return Err(format!("Failed to save workspace: {}", e));
+    }
+    
+    Ok(project)
+}
+
+/// Rename a project
+#[tauri::command]
+pub fn rename_project(
+    state: State<AppState>,
+    project_id: String,
+    name: String,
+) -> Result<(), String> {
+    let mut workspace = state.workspace.lock().unwrap();
+    
+    if let Some(project) = workspace.get_project_mut(&project_id) {
+        project.name = name;
+        project.updated_at = chrono::Utc::now().to_rfc3339();
+        
+        if let Err(e) = save_workspace(&workspace, &state.data_dir) {
+            return Err(format!("Failed to save workspace: {}", e));
+        }
+        
+        Ok(())
+    } else {
+        Err(format!("Project with id {} not found", project_id))
+    }
 }
 
 #[tauri::command]
 pub fn create_section(state: State<AppState>, name: String) -> Result<Section, String> {
-    let mut project = state.project.lock().unwrap();
+    let mut workspace = state.workspace.lock().unwrap();
+    let project = workspace.get_active_project_mut()
+        .ok_or("No active project found".to_string())?;
+    
     let section = Section::new(name);
     let section_clone = section.clone();
     project.add_section(section);
     
     // Save to file
-    if let Err(e) = save_project(&project, &state.data_dir) {
-        return Err(format!("Failed to save project: {}", e));
+    if let Err(e) = save_workspace(&workspace, &state.data_dir) {
+        return Err(format!("Failed to save workspace: {}", e));
     }
     
     Ok(section_clone)
@@ -37,14 +122,16 @@ pub fn update_section_name(
     section_id: String,
     name: String,
 ) -> Result<(), String> {
-    let mut project = state.project.lock().unwrap();
+    let mut workspace = state.workspace.lock().unwrap();
+    let project = workspace.get_active_project_mut()
+        .ok_or("No active project found".to_string())?;
     
     if let Some(section) = project.get_section_mut(&section_id) {
         section.name = name;
         project.updated_at = chrono::Utc::now().to_rfc3339();
         
-        if let Err(e) = save_project(&project, &state.data_dir) {
-            return Err(format!("Failed to save project: {}", e));
+        if let Err(e) = save_workspace(&workspace, &state.data_dir) {
+            return Err(format!("Failed to save workspace: {}", e));
         }
         
         Ok(())
@@ -55,12 +142,14 @@ pub fn update_section_name(
 
 #[tauri::command]
 pub fn delete_section(state: State<AppState>, section_id: String) -> Result<(), String> {
-    let mut project = state.project.lock().unwrap();
+    let mut workspace = state.workspace.lock().unwrap();
+    let project = workspace.get_active_project_mut()
+        .ok_or("No active project found".to_string())?;
     
     project.remove_section(&section_id)?;
     
-    if let Err(e) = save_project(&project, &state.data_dir) {
-        return Err(format!("Failed to save project: {}", e));
+    if let Err(e) = save_workspace(&workspace, &state.data_dir) {
+        return Err(format!("Failed to save workspace: {}", e));
     }
     
     Ok(())
@@ -72,7 +161,9 @@ pub fn create_topic(
     section_id: String,
     name: String,
 ) -> Result<Topic, String> {
-    let mut project = state.project.lock().unwrap();
+    let mut workspace = state.workspace.lock().unwrap();
+    let project = workspace.get_active_project_mut()
+        .ok_or("No active project found".to_string())?;
     
     if let Some(section) = project.get_section_mut(&section_id) {
         let topic = Topic::new(name, String::new(), section_id.clone());
@@ -80,8 +171,8 @@ pub fn create_topic(
         section.add_topic(topic);
         project.updated_at = chrono::Utc::now().to_rfc3339();
         
-        if let Err(e) = save_project(&project, &state.data_dir) {
-            return Err(format!("Failed to save project: {}", e));
+        if let Err(e) = save_workspace(&workspace, &state.data_dir) {
+            return Err(format!("Failed to save workspace: {}", e));
         }
         
         Ok(topic_clone)
@@ -96,14 +187,16 @@ pub fn update_topic_content(
     topic_id: String,
     content: String,
 ) -> Result<(), String> {
-    let mut project = state.project.lock().unwrap();
+    let mut workspace = state.workspace.lock().unwrap();
+    let project = workspace.get_active_project_mut()
+        .ok_or("No active project found".to_string())?;
     
     if let Some(topic) = project.get_topic_mut(&topic_id) {
         topic.content = content;
         project.updated_at = chrono::Utc::now().to_rfc3339();
         
-        if let Err(e) = save_project(&project, &state.data_dir) {
-            return Err(format!("Failed to save project: {}", e));
+        if let Err(e) = save_workspace(&workspace, &state.data_dir) {
+            return Err(format!("Failed to save workspace: {}", e));
         }
         
         Ok(())
@@ -118,14 +211,16 @@ pub fn update_topic_name(
     topic_id: String,
     name: String,
 ) -> Result<(), String> {
-    let mut project = state.project.lock().unwrap();
+    let mut workspace = state.workspace.lock().unwrap();
+    let project = workspace.get_active_project_mut()
+        .ok_or("No active project found".to_string())?;
     
     if let Some(topic) = project.get_topic_mut(&topic_id) {
         topic.name = name;
         project.updated_at = chrono::Utc::now().to_rfc3339();
         
-        if let Err(e) = save_project(&project, &state.data_dir) {
-            return Err(format!("Failed to save project: {}", e));
+        if let Err(e) = save_workspace(&workspace, &state.data_dir) {
+            return Err(format!("Failed to save workspace: {}", e));
         }
         
         Ok(())
@@ -136,15 +231,17 @@ pub fn update_topic_name(
 
 #[tauri::command]
 pub fn delete_topic(state: State<AppState>, topic_id: String) -> Result<(), String> {
-    let mut project = state.project.lock().unwrap();
+    let mut workspace = state.workspace.lock().unwrap();
+    let project = workspace.get_active_project_mut()
+        .ok_or("No active project found".to_string())?;
     
     // Find and remove the topic from its section
     for section in &mut project.sections {
         if section.remove_topic(&topic_id).is_ok() {
             project.updated_at = chrono::Utc::now().to_rfc3339();
             
-            if let Err(e) = save_project(&project, &state.data_dir) {
-                return Err(format!("Failed to save project: {}", e));
+            if let Err(e) = save_workspace(&workspace, &state.data_dir) {
+                return Err(format!("Failed to save workspace: {}", e));
             }
             
             return Ok(());
@@ -161,12 +258,14 @@ pub fn reorder_item(
     id: String,
     new_index: usize,
 ) -> Result<(), String> {
-    let mut project = state.project.lock().unwrap();
+    let mut workspace = state.workspace.lock().unwrap();
+    let project = workspace.get_active_project_mut()
+        .ok_or("No active project found".to_string())?;
     
     project.reorder_item(&item_type, &id, new_index)?;
     
-    if let Err(e) = save_project(&project, &state.data_dir) {
-        return Err(format!("Failed to save project: {}", e));
+    if let Err(e) = save_workspace(&workspace, &state.data_dir) {
+        return Err(format!("Failed to save workspace: {}", e));
     }
     
     Ok(())
@@ -174,7 +273,9 @@ pub fn reorder_item(
 
 #[tauri::command]
 pub fn get_merged_output(state: State<AppState>) -> Result<String, String> {
-    let project = state.project.lock().unwrap();
+    let workspace = state.workspace.lock().unwrap();
+    let project = workspace.get_active_project()
+        .ok_or("No active project found".to_string())?;
     Ok(project.get_merged_output())
 }
 
@@ -260,14 +361,14 @@ pub async fn refine_with_llm(content: String) -> Result<String, String> {
     Ok(refined_content)
 }
 
-fn save_project(project: &Project, data_dir: &PathBuf) -> Result<(), String> {
-    let project_path = data_dir.join("project.json");
+fn save_workspace(workspace: &Workspace, data_dir: &PathBuf) -> Result<(), String> {
+    let workspace_path = data_dir.join("workspace.json");
     
-    let project_json = serde_json::to_string_pretty(project)
-        .map_err(|e| format!("Failed to serialize project: {}", e))?;
+    let workspace_json = serde_json::to_string_pretty(workspace)
+        .map_err(|e| format!("Failed to serialize workspace: {}", e))?;
     
-    fs::write(project_path, project_json)
-        .map_err(|e| format!("Failed to write project file: {}", e))?;
+    fs::write(workspace_path, workspace_json)
+        .map_err(|e| format!("Failed to write workspace file: {}", e))?;
     
     Ok(())
 }

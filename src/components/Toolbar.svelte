@@ -1,9 +1,13 @@
 <script lang="ts">
   import { createSection, projectStore, platform, getPlatform } from '../stores/projectStore';
   import { onMount } from 'svelte';
+  import ProjectSwitcher from './ProjectSwitcher.svelte';
 
   let showNewSectionDialog = false;
   let newSectionName = '';
+  let projectSwitcherComponent: ProjectSwitcher;
+
+  export { projectSwitcherComponent };
 
   onMount(async () => {
     try {
@@ -47,7 +51,7 @@
 <div class="toolbar">
   <div class="toolbar-left">
     <h1 class="app-title">PromptMux</h1>
-    <span class="project-name">{$projectStore?.name || 'Loading...'}</span>
+    <ProjectSwitcher bind:this={projectSwitcherComponent} />
     <span class="platform-badge">
       <span class="platform-icon">💻</span>
       {$platform}
