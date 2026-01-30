@@ -58,6 +58,16 @@ export async function saveProjectRefinement(refinement: Refinement): Promise<voi
   }
 }
 
+export async function saveProjectErDiagram(erDiagram: string): Promise<void> {
+  try {
+    await invoke('save_project_er_diagram', { erDiagram });
+    await loadProject();
+  } catch (error) {
+    console.error('Failed to save project ER diagram:', error);
+    throw error;
+  }
+}
+
 export interface Project {
   id: string;
   name: string;
@@ -65,6 +75,7 @@ export interface Project {
   created_at: string;
   updated_at: string;
   history?: Refinement[];
+  er_diagram?: string;
 }
 
 export interface Workspace {

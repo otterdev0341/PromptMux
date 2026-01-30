@@ -24,7 +24,7 @@ impl Workspace {
         }
     }
 
-    pub fn add_project(&mut self, mut project: Project) -> String {
+    pub fn add_project(&mut self, project: Project) -> String {
         self.projects.push(project.clone());
         self.updated_at = chrono::Utc::now().to_rfc3339();
         project.id.clone()
@@ -89,6 +89,7 @@ pub struct Project {
     pub updated_at: String,
     #[serde(default)]
     pub history: Vec<Refinement>,
+    pub er_diagram: Option<String>,
 }
 
 impl Project {
@@ -101,6 +102,7 @@ impl Project {
             created_at: now.clone(),
             updated_at: now,
             history: Vec::new(),
+            er_diagram: None,
         }
     }
 

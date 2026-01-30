@@ -1,17 +1,25 @@
 <script lang="ts">
-  import { mergedOutput, projectStore, saveProjectRefinement } from '../stores/projectStore';
+  import { mergedOutput, projectStore, saveProjectRefinement, saveProjectErDiagram } from '../stores/projectStore';
   import type { Refinement } from '../stores/projectStore';
   import { invoke } from '@tauri-apps/api/core';
   import { listen } from '@tauri-apps/api/event';
-  import { onDestroy } from 'svelte';
+  import { onDestroy, onMount } from 'svelte';
+  import mermaid from 'mermaid';
 
   let outputContent = '';
   let refinedContent = '';
-  let activeTab: 'raw' | 'refine' = 'raw';
+  let activeTab: 'raw' | 'refine' | 'er' = 'raw';
   let refineTab: 'generate' | 'history' = 'generate';
+  let erTab: 'editor' | 'render' = 'render';
   let isRefining = false;
   let refineError = '';
   let focused = false;
+  
+  // ER State
+  let erCode = '';
+  let isGeneratingEr = false;
+  let erError = '';
+  let mermaidContainer: HTMLElement;
   
   // Track listeners to clean up
   let unlistenFunctions: (() => void)[] = [];
@@ -21,6 +29,25 @@
   onDestroy(() => {
     cleanupListeners();
   });
+
+  // Initialize Mermaid
+  onMount(() => {
+    mermaid.initialize({ 
+      startOnLoad: false,
+      theme: 'dark',
+      securityLevel: 'loose',
+    });
+    
+    // Load existing diagram if available
+    if ($projectStore && $projectStore.er_diagram) {
+      erCode = $projectStore.er_diagram;
+    }
+  });
+
+  // Watch for project updates
+  $: if ($projectStore && $projectStore.er_diagram && !erCode) {
+    erCode = $projectStore.er_diagram;
+  }
 
   function cleanupListeners() {
     unlistenFunctions.forEach(unlisten => unlisten());
@@ -35,12 +62,92 @@
     focused = false;
   }
   
-  function switchTab(tab: 'raw' | 'refine') {
+  function switchTab(tab: 'raw' | 'refine' | 'er') {
     activeTab = tab;
+    if (tab === 'er' && erTab === 'render') {
+      setTimeout(renderDiagram, 100);
+    }
   }
 
   function switchRefineTab(tab: 'generate' | 'history') {
     refineTab = tab;
+  }
+
+  function switchErTab(tab: 'editor' | 'render') {
+    erTab = tab;
+    if (tab === 'render') {
+      setTimeout(renderDiagram, 100);
+    }
+  }
+
+  async function renderDiagram() {
+    if (!erCode || !mermaidContainer) return;
+    
+    try {
+      mermaidContainer.innerHTML = '';
+      const { svg } = await mermaid.render('mermaid-svg-' + Date.now(), erCode);
+      mermaidContainer.innerHTML = svg;
+    } catch (error) {
+      console.error('Mermaid render error:', error);
+      mermaidContainer.innerHTML = `<div class="error-msg">Failed to render diagram: ${error}</div>`;
+    }
+  }
+
+  async function handleGenerateEr() {
+    if (!outputContent) return;
+    
+    // Reset state
+    isGeneratingEr = true;
+    erError = '';
+    cleanupListeners();
+    
+    // Switch to editor view to see it streaming in
+    erTab = 'editor';
+    erCode = ''; 
+    
+    try {
+      const unlistenChunk = await listen<string>('er:chunk', (event) => {
+        erCode += event.payload;
+      });
+      
+      const unlistenDone = await listen('er:done', () => {
+        isGeneratingEr = false;
+        cleanupListeners();
+        saveProjectErDiagram(erCode);
+      });
+      
+      const unlistenError = await listen<string>('er:error', (event) => {
+        console.error('ER stream error:', event.payload);
+        erError = event.payload;
+        isGeneratingEr = false;
+        cleanupListeners();
+      });
+      
+      unlistenFunctions.push(unlistenChunk, unlistenDone, unlistenError);
+      
+      await invoke('refine_er_diagram_with_llm_stream', { content: refinedContent || outputContent });
+    } catch (err) {
+      console.error('ER generation failed:', err);
+      erError = String(err);
+      isGeneratingEr = false;
+      cleanupListeners();
+    }
+  }
+
+  async function handleSaveEr() {
+    if (!erCode) return;
+    try {
+      await saveProjectErDiagram(erCode);
+      
+      // Feedback
+      const indicator = document.createElement('div');
+      indicator.className = 'copy-indicator';
+      indicator.textContent = 'ER Diagram Saved!';
+      document.body.appendChild(indicator);
+      setTimeout(() => indicator.remove(), 1000);
+    } catch (err) {
+      console.error('Failed to save ER diagram:', err);
+    }
   }
 
   async function handleRefine() {
@@ -144,6 +251,12 @@
       >
         Refine ✨
       </button>
+      <button 
+        class="tab-btn {activeTab === 'er' ? 'active' : ''}" 
+        on:click={() => switchTab('er')}
+      >
+        ER Diagram
+      </button>
     </div>
     
     <div class="header-actions">
@@ -152,9 +265,13 @@
         <button class="copy-button" on:click={() => copyToClipboard(outputContent)}>
           📋 Copy
         </button>
-      {:else if refinedContent}
+      {:else if refinedContent && activeTab === 'refine'}
         <button class="copy-button" on:click={() => copyToClipboard(refinedContent)}>
           📋 Copy Refined
+        </button>
+      {:else if erCode && activeTab === 'er'}
+        <button class="copy-button" on:click={() => copyToClipboard(erCode)}>
+          📋 Copy Code
         </button>
       {/if}
     </div>
@@ -252,6 +369,62 @@
           </div>
         {/if}
       </div>
+    {:else if activeTab === 'er'}
+      <div class="refine-wrapper">
+        <div class="refine-tabs">
+          <button 
+            class="refine-tab-btn {erTab === 'editor' ? 'active' : ''}" 
+            on:click={() => switchErTab('editor')}
+          >
+            Editor
+          </button>
+          <button 
+            class="refine-tab-btn {erTab === 'render' ? 'active' : ''}" 
+            on:click={() => switchErTab('render')}
+          >
+            Render
+          </button>
+        </div>
+
+        <div class="er-container">
+           {#if erTab === 'editor'}
+              <div class="er-editor-container">
+                 <textarea 
+                   class="er-editor" 
+                   bind:value={erCode}
+                   placeholder="Mermaid ER diagram code will appear here..."
+                 ></textarea>
+                 
+                 <div class="refine-actions">
+                   {#if isGeneratingEr}
+                     <div class="generating-indicator">
+                        <div class="spinner-small"></div> Generating...
+                     </div>
+                   {:else}
+                    <button class="action-btn secondary" on:click={handleGenerateEr}>
+                      {erCode ? 'Re-generate from Refined' : 'Generate from Refined'}
+                    </button>
+                    <button class="action-btn primary" on:click={handleSaveEr} disabled={!erCode}>
+                      Save
+                    </button>
+                   {/if}
+                 </div>
+                 {#if erError}
+                    <div class="error-msg">{erError}</div>
+                 {/if}
+              </div>
+           {:else}
+              <div class="er-render-container" bind:this={mermaidContainer}>
+                <!-- Mermaid diagram rendered here -->
+                {#if !erCode}
+                  <div class="empty-state-small">
+                     <p>Generate a diagram first.</p>
+                  </div>
+                {/if}
+              </div>
+           {/if}
+        </div>
+      </div>
     {/if}
   </div>
 </div>
@@ -337,7 +510,6 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    position: relative;
   }
 
   .refine-actions {
@@ -577,5 +749,80 @@
   .empty-icon {
     font-size: 2rem;
     margin-bottom: 1rem;
+  }
+
+  .er-container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    position: relative;
+    background-color: #0d1117;
+  }
+
+  .er-editor-container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+  }
+
+  .er-editor {
+    flex: 1;
+    background-color: #0d1117;
+    color: #e2e8f0;
+    border: none;
+    padding: 1rem;
+    font-family: 'Fira Code', 'Monaco', 'Consolas', monospace;
+    font-size: 0.875rem;
+    line-height: 1.6;
+    resize: none;
+    outline: none;
+  }
+
+  .er-render-container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+    overflow: auto;
+    background-color: #0d1117;
+  }
+  
+  /* Mermaid styles adjustment */
+  :global(.er-render-container svg) {
+    max-width: 100%;
+    height: auto;
+  }
+
+  .generating-indicator {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: #a0aec0;
+    font-size: 0.875rem;
+  }
+
+  .spinner-small {
+    width: 16px;
+    height: 16px;
+    border: 2px solid #2d3748;
+    border-top-color: #63b3ed;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+  }
+
+  .empty-state-small {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: #a0aec0;
+    font-size: 0.875rem;
+    padding: 2rem;
+    border: 1px dashed #2d3748;
+    border-radius: 0.5rem;
   }
 </style>
