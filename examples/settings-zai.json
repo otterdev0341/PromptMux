@@ -1,0 +1,6 @@
+{
+  "provider": "openai",
+  "apiKey": "your-zai-api-key-here",
+  "baseUrl": "https://api.z.ai/api/coding/paas/v4",
+  "model": "glm-4.5-air"
+}

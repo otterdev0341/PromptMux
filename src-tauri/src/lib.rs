@@ -39,6 +39,9 @@ pub fn run() {
             commands::reorder_item,
             commands::get_merged_output,
             commands::refine_with_llm,
+            commands::refine_with_llm_stream,
+            commands::get_llm_settings,
+            commands::save_llm_settings,
             commands::get_platform,
         ])
         .run(tauri::generate_context!())

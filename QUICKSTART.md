@@ -15,7 +15,7 @@
    cp examples/settings.json ~/.promptmux/settings.json
    ```
    
-   Edit `~/.promptmux/settings.json` and add your API key:
+   Edit `~/.promptmux/settings.json` and add your API key.
    ```json
    {
      "provider": "openai",
@@ -24,6 +24,19 @@
      "model": "gpt-4"
    }
    ```
+
+    **For Z.ai (GLM Models):**
+    ```json
+    {
+    "provider": "openai",
+    "apiKey": "your-zai-api-key",
+    "baseUrl": "https://api.z.ai/api/coding/paas/v4",
+    "model": "glm-4.5-air"
+    }
+    ```
+    
+    > **Tip:** Z.ai offers GLM-4.5-air (faster responses, recommended) and GLM-4.7 (for complex tasks). Both are OpenAI-compatible.
+
 
 3. **Run the Application**
    ```bash
@@ -118,6 +131,7 @@
 
 - Explore all keyboard shortcuts (`Ctrl+b ?`)
 - Set up your LLM configuration for AI refinement
+- Check out the [Z.ai Integration Guide](docs/Z_AI_SETUP.md) for using GLM models
 - Check the full README.md for advanced features
 - Build your production app: `npm run tauri build`
 

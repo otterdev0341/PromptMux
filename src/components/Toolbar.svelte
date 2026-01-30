@@ -1,9 +1,16 @@
 <script lang="ts">
   import { createSection, projectStore, platform, getPlatform } from '../stores/projectStore';
-  import { onMount } from 'svelte';
+  import { onMount, createEventDispatcher } from 'svelte';
   import ProjectSwitcher from './ProjectSwitcher.svelte';
+  import SettingsModal from './SettingsModal.svelte';
+
+  const dispatch = createEventDispatcher();
+
+  export let showSidebar = true;
+  export let showEditor = true;
 
   let showNewSectionDialog = false;
+  let showSettingsDialog = false;
   let newSectionName = '';
   let projectSwitcherComponent: ProjectSwitcher;
 
@@ -14,14 +21,30 @@
       const os = await getPlatform();
       platform.set(os);
     } catch (error) {
-      console.error('Failed to detect platform:', error);
+      console.error('Failed to detect software platform:', error);
       platform.set('Unknown');
     }
   });
 
+  function handleToggleSidebar() {
+    dispatch('toggleSidebar');
+  }
+
+  function handleToggleEditor() {
+    dispatch('toggleEditor');
+  }
+
   function handleNewSection() {
     newSectionName = 'New Section';
     showNewSectionDialog = true;
+  }
+  
+  function handleOpenSettings() {
+    showSettingsDialog = true;
+  }
+  
+  function handleCloseSettings() {
+    showSettingsDialog = false;
   }
 
   async function confirmNewSection() {
@@ -50,6 +73,9 @@
 
 <div class="toolbar">
   <div class="toolbar-left">
+    <button class="icon-btn" on:click={handleToggleSidebar} title={showSidebar ? "Hide Sidebar" : "Show Sidebar"}>
+      {showSidebar ? '◀' : '▶'}
+    </button>
     <h1 class="app-title">PromptMux</h1>
     <ProjectSwitcher bind:this={projectSwitcherComponent} />
     <span class="platform-badge">
@@ -59,12 +85,24 @@
   </div>
 
   <div class="toolbar-right">
+    <button class="icon-btn" on:click={handleToggleEditor} title={showEditor ? "Hide Editor" : "Show Editor"}>
+      {showEditor ? '📝' : '📝'}
+    </button>
+    <button class="toolbar-btn" on:click={handleOpenSettings} title="LLM Settings">
+      <span class="btn-icon">⚙️</span>
+      <span class="btn-text">Settings</span>
+    </button>
+    
     <button class="toolbar-btn" on:click={handleNewSection} title="New Section (Ctrl+b then n)">
       <span class="btn-icon">➕</span>
       <span class="btn-text">New Section</span>
     </button>
   </div>
 </div>
+
+{#if showSettingsDialog}
+  <SettingsModal onClose={handleCloseSettings} />
+{/if}
 
 {#if showNewSectionDialog}
   <div class="modal-backdrop" on:click={cancelNewSection}>
@@ -139,6 +177,25 @@
     display: flex;
     align-items: center;
     gap: 0.75rem;
+  }
+
+  .icon-btn {
+    background: none;
+    border: none;
+    color: #a0aec0;
+    font-size: 1.2rem;
+    cursor: pointer;
+    padding: 0.5rem;
+    border-radius: 0.375rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+  }
+
+  .icon-btn:hover {
+    color: #e2e8f0;
+    background-color: #2d3748;
   }
 
   .toolbar-btn {

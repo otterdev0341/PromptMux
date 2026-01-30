@@ -72,6 +72,8 @@ Create a settings file at `~/.promptmux/settings.json`:
 }
 ```
 
+> **New!** 🎉 We now support Z.ai GLM models! Check out [Z.ai Integration Guide](docs/Z_AI_SETUP.md) for details.
+
 #### Supported Providers
 
 **OpenAI:**
@@ -103,6 +105,18 @@ Create a settings file at `~/.promptmux/settings.json`:
   "model": "llama2"
 }
 ```
+
+**Z.ai (GLM Models):**
+```json
+{
+  "provider": "openai",
+  "apiKey": "your-zai-api-key",
+  "baseUrl": "https://api.z.ai/api/coding/paas/v4",
+  "model": "glm-4.5-air"
+}
+```
+
+> **Note:** Z.ai provides GLM-4.5-air (lightweight/faster response, recommended) and GLM-4.7 (standard/complex tasks). Both models are OpenAI-compatible and require a Z.ai API key.
 
 ## Keyboard Shortcuts
 

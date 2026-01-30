@@ -5,15 +5,18 @@
 
   const dispatch = createEventDispatcher();
 
+  export let showEditor = true;
+  export let id: string = '';
+
   function handleRefineTopic() {
     dispatch('refineTopic');
   }
-
-  export let id: string = '';
 </script>
 
 <div class="main-editor" {id}>
-  <TopicEditor on:refineTopic={handleRefineTopic} />
+  {#if showEditor}
+    <TopicEditor on:refineTopic={handleRefineTopic} />
+  {/if}
   <MergedOutput />
 </div>
 

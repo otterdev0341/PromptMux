@@ -16,6 +16,18 @@
   let sidebarComponent: Sidebar;
   let toolbarComponent: Toolbar;
 
+  // UI State
+  let showSidebar = true;
+  let showEditor = true;
+
+  function toggleSidebar() {
+    showSidebar = !showSidebar;
+  }
+
+  function toggleEditor() {
+    showEditor = !showEditor;
+  }
+
   onMount(async () => {
     await loadProject();
     
@@ -189,13 +201,22 @@
 
 <div class="app-container">
   <div class="app-header">
-    <Toolbar bind:this={toolbarComponent} />
+    <Toolbar 
+      bind:this={toolbarComponent} 
+      {showSidebar}
+      {showEditor}
+      on:toggleSidebar={toggleSidebar}
+      on:toggleEditor={toggleEditor}
+    />
   </div>
   
   <div class="app-main">
-    <Sidebar id="sidebar" bind:this={sidebarComponent} />
+    {#if showSidebar}
+      <Sidebar id="sidebar" bind:this={sidebarComponent} />
+    {/if}
     <MainEditor 
       id="main-editor"
+      {showEditor}
       on:refineTopic={openRefineModal}
     />
   </div>
