@@ -7,7 +7,8 @@
 
   let outputContent = '';
   let refinedContent = '';
-  let activeTab: 'raw' | 'refined' | 'history' = 'raw';
+  let activeTab: 'raw' | 'refine' = 'raw';
+  let refineTab: 'generate' | 'history' = 'generate';
   let isRefining = false;
   let refineError = '';
   let focused = false;
@@ -34,8 +35,12 @@
     focused = false;
   }
   
-  function switchTab(tab: 'raw' | 'refined' | 'history') {
+  function switchTab(tab: 'raw' | 'refine') {
     activeTab = tab;
+  }
+
+  function switchRefineTab(tab: 'generate' | 'history') {
+    refineTab = tab;
   }
 
   async function handleRefine() {
@@ -134,19 +139,10 @@
         Merged Output
       </button>
       <button 
-        class="tab-btn {activeTab === 'refined' ? 'active' : ''}" 
-        on:click={() => switchTab('refined')}
+        class="tab-btn {activeTab === 'refine' ? 'active' : ''}" 
+        on:click={() => switchTab('refine')}
       >
-        Refine Prompt ✨
-      </button>
-      <button 
-        class="tab-btn {activeTab === 'history' ? 'active' : ''}" 
-        on:click={() => switchTab('history')}
-      >
-        History
-        {#if $projectStore && $projectStore.history && $projectStore.history.length > 0}
-          <span class="count">{$projectStore.history.length}</span>
-        {/if}
+        Refine ✨
       </button>
     </div>
     
@@ -173,64 +169,86 @@
         on:focus={handleFocus}
         on:blur={handleBlur}
       >{outputContent || 'Your merged prompt will appear here...'}</pre>
-    {:else if activeTab === 'refined'}
-      <div class="refine-container">
-        {#if isRefining}
-          <div class="loading-state">
-            <div class="spinner"></div>
-            <p>Refining prompt with AI...</p>
-          </div>
-        {:else if refineError}
-           <div class="error-state">
-             <p>Refinement failed:</p>
-             <pre class="error-msg">{refineError}</pre>
-             <button class="action-btn" on:click={handleRefine}>Retry</button>
-           </div>
-        {:else if refinedContent}
-           <pre class="output-content refined">{refinedContent}</pre>
-           <div class="refine-actions">
-             <button class="action-btn secondary" on:click={handleRefine}>Re-generate</button>
-             <button class="action-btn primary" on:click={handleSaveToHistory}>Save to History</button>
-           </div>
-        {:else}
-           <div class="empty-state">
-             <p>Use AI to improve your prompt's clarity and structure.</p>
-             <button 
-               class="action-btn primary" 
-               on:click={handleRefine}
-               disabled={!outputContent}
-              >
-               Refine with AI
-             </button>
-             {#if !outputContent}
-               <p class="hint">Add some content to your sections first.</p>
-             {/if}
-           </div>
-        {/if}
-      </div>
-    {:else if activeTab === 'history'}
-      <div class="history-view">
-        {#if $projectStore && $projectStore.history && $projectStore.history.length > 0}
-          <div class="history-list">
-            {#each [...$projectStore.history].reverse() as item}
-              <div class="history-item">
-                <div class="history-meta">
-                  <span class="history-time">{formatDate(item.timestamp)}</span>
-                  <button class="restore-btn" on:click={() => handleRestore(item.refined_content)}>
-                    📋 Copy to Clipboard
-                  </button>
-                </div>
-                <div class="history-content-preview">
-                  <pre>{item.refined_content}</pre>
-                </div>
+    {:else if activeTab === 'refine'}
+      <div class="refine-wrapper">
+        <div class="refine-tabs">
+          <button 
+            class="refine-tab-btn {refineTab === 'generate' ? 'active' : ''}" 
+            on:click={() => switchRefineTab('generate')}
+          >
+            Generate
+          </button>
+          <button 
+            class="refine-tab-btn {refineTab === 'history' ? 'active' : ''}" 
+            on:click={() => switchRefineTab('history')}
+          >
+            History
+            {#if $projectStore && $projectStore.history && $projectStore.history.length > 0}
+              <span class="count">{$projectStore.history.length}</span>
+            {/if}
+          </button>
+        </div>
+
+        {#if refineTab === 'generate'}
+          <div class="refine-container">
+            {#if isRefining}
+              <div class="loading-state">
+                <div class="spinner"></div>
+                <p>Refining prompt with AI...</p>
               </div>
-            {/each}
+            {:else if refineError}
+               <div class="error-state">
+                 <p>Refinement failed:</p>
+                 <pre class="error-msg">{refineError}</pre>
+                 <button class="action-btn" on:click={handleRefine}>Retry</button>
+               </div>
+            {:else if refinedContent}
+               <pre class="output-content refined">{refinedContent}</pre>
+               <div class="refine-actions">
+                 <button class="action-btn secondary" on:click={handleRefine}>Re-generate</button>
+                 <button class="action-btn primary" on:click={handleSaveToHistory}>Save to History</button>
+               </div>
+            {:else}
+               <div class="empty-state">
+                 <p>Use AI to improve your prompt's clarity and structure.</p>
+                 <button 
+                   class="action-btn primary" 
+                   on:click={handleRefine}
+                   disabled={!outputContent}
+                  >
+                   Refine with AI
+                 </button>
+                 {#if !outputContent}
+                   <p class="hint">Add some content to your sections first.</p>
+                 {/if}
+               </div>
+            {/if}
           </div>
-        {:else}
-          <div class="empty-state">
-            <span class="empty-icon">⏳</span>
-            <h3>No History Yet</h3>
-            <p>Refine the merged output and save it to see history here.</p>
+        {:else if refineTab === 'history'}
+          <div class="history-view">
+            {#if $projectStore && $projectStore.history && $projectStore.history.length > 0}
+              <div class="history-list">
+                {#each [...$projectStore.history].reverse() as item}
+                  <div class="history-item">
+                    <div class="history-meta">
+                      <span class="history-time">{formatDate(item.timestamp)}</span>
+                      <button class="restore-btn" on:click={() => handleRestore(item.refined_content)}>
+                        📋 Copy to Clipboard
+                      </button>
+                    </div>
+                    <div class="history-content-preview">
+                      <pre>{item.refined_content}</pre>
+                    </div>
+                  </div>
+                {/each}
+              </div>
+            {:else}
+              <div class="empty-state">
+                <span class="empty-icon">⏳</span>
+                <h3>No History Yet</h3>
+                <p>Refine the merged output and save it to see history here.</p>
+              </div>
+            {/if}
           </div>
         {/if}
       </div>
@@ -514,6 +532,46 @@
     color: #e2e8f0;
     white-space: pre-wrap;
     word-break: break-all;
+  }
+
+  .refine-wrapper {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .refine-tabs {
+    display: flex;
+    border-bottom: 1px solid #2d3748;
+    background-color: #1a202c;
+    justify-content: center;
+    gap: 1rem;
+    padding: 0.5rem;
+  }
+
+  .refine-tab-btn {
+    background: none;
+    border: none;
+    color: #a0aec0;
+    padding: 0.5rem 1rem;
+    font-size: 0.8rem;
+    font-weight: 500;
+    cursor: pointer;
+    border-radius: 0.25rem;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+  }
+
+  .refine-tab-btn:hover {
+    color: #e2e8f0;
+    background-color: #2d3748;
+  }
+
+  .refine-tab-btn.active {
+    color: #63b3ed;
+    background-color: rgba(99, 179, 237, 0.1);
   }
 
   .empty-icon {
