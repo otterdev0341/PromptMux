@@ -21,6 +21,14 @@
   let erError = '';
   let mermaidContainer: HTMLElement;
   
+  // Zoom/Pan State
+  let zoomScale = 1;
+  let panX = 0;
+  let panY = 0;
+  let isPanning = false;
+  let startX = 0;
+  let startY = 0;
+  
   // Track listeners to clean up
   let unlistenFunctions: (() => void)[] = [];
 
@@ -79,9 +87,55 @@
       setTimeout(renderDiagram, 100);
     }
   }
+  
+  // Zoom Handler
+  function handleWheel(e: WheelEvent) {
+    if (erTab !== 'render') return;
+    e.preventDefault();
+    
+    const delta = e.deltaY > 0 ? 0.9 : 1.1;
+    const newScale = Math.max(0.1, Math.min(5, zoomScale * delta));
+    zoomScale = newScale;
+  }
+  
+  // Pan Handlers
+  function handleMouseDown(e: MouseEvent) {
+    if (erTab !== 'render') return;
+    isPanning = true;
+    startX = e.clientX - panX;
+    startY = e.clientY - panY;
+  }
+  
+  function handleMouseMove(e: MouseEvent) {
+    if (!isPanning) return;
+    e.preventDefault();
+    panX = e.clientX - startX;
+    panY = e.clientY - startY;
+  }
+  
+  function handleMouseUp() {
+    isPanning = false;
+  }
+  
+  function handleResetView() {
+    zoomScale = 1;
+    panX = 0;
+    panY = 0;
+  }
+
+  function handleZoomIn() {
+    zoomScale = Math.min(5, zoomScale * 1.2);
+  }
+
+  function handleZoomOut() {
+    zoomScale = Math.max(0.1, zoomScale * 0.8);
+  }
 
   async function renderDiagram() {
     if (!erCode || !mermaidContainer) return;
+    
+    // Reset view when re-rendering
+    handleResetView();
     
     try {
       mermaidContainer.innerHTML = '';
@@ -414,13 +468,35 @@
                  {/if}
               </div>
            {:else}
-              <div class="er-render-container" bind:this={mermaidContainer}>
-                <!-- Mermaid diagram rendered here -->
-                {#if !erCode}
-                  <div class="empty-state-small">
-                     <p>Generate a diagram first.</p>
-                  </div>
-                {/if}
+              <div 
+                class="er-render-container" 
+                role="region"
+                aria-label="ER Diagram Render View"
+                on:wheel={handleWheel}
+                on:mousedown={handleMouseDown}
+                on:mousemove={handleMouseMove}
+                on:mouseup={handleMouseUp}
+                on:mouseleave={handleMouseUp}
+                style="cursor: {isPanning ? 'grabbing' : 'grab'};"
+              >
+                <div 
+                  class="zoom-container"
+                  style="transform: translate({panX}px, {panY}px) scale({zoomScale});"
+                  bind:this={mermaidContainer}
+                >
+                  <!-- Mermaid diagram rendered here -->
+                  {#if !erCode}
+                    <div class="empty-state-small">
+                       <p>Generate a diagram first.</p>
+                    </div>
+                  {/if}
+                </div>
+                
+                <div class="zoom-controls">
+                  <button class="zoom-btn" on:click={handleZoomIn} title="Zoom In">+</button>
+                  <button class="zoom-btn" on:click={handleZoomOut} title="Zoom Out">-</button>
+                  <button class="zoom-btn" on:click={handleResetView} title="Reset View">Reset</button>
+                </div>
               </div>
            {/if}
         </div>
@@ -786,14 +862,55 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: 2rem;
-    overflow: auto;
+    overflow: hidden; /* Changed from auto to hidden for custom pan/zoom */
     background-color: #0d1117;
+    position: relative; /* Context for absolute controls */
   }
   
+  .zoom-container {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.1s ease-out;
+    transform-origin: center;
+  }
+  
+  .zoom-controls {
+    position: absolute;
+    bottom: 1rem;
+    right: 1rem;
+    display: flex;
+    gap: 0.5rem;
+    background: rgba(13, 17, 23, 0.8);
+    padding: 0.5rem;
+    border-radius: 0.5rem;
+    border: 1px solid #30363d;
+  }
+  
+  .zoom-btn {
+    background: #21262d;
+    border: 1px solid #30363d;
+    color: #c9d1d9;
+    width: 32px;
+    height: 32px;
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+  }
+  
+  .zoom-btn:hover {
+    background: #30363d;
+    color: #58a6ff;
+  }
+
   /* Mermaid styles adjustment */
   :global(.er-render-container svg) {
-    max-width: 100%;
+    max-width: none; /* Allow scaling */
     height: auto;
   }
 
