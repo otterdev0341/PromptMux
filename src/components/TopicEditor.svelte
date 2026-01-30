@@ -2,6 +2,7 @@
   import { onMount, tick } from 'svelte';
   import { createEventDispatcher } from 'svelte';
   import { activeTopic, updateTopicContent, activeTopicId, projectStore, workspaceStore } from '../stores/projectStore';
+  import type { Refinement } from '../stores/projectStore';
   import { debounce } from '../utils/debounce';
 
   const dispatch = createEventDispatcher();
@@ -14,6 +15,7 @@
   let isSaving = false;
   let hasUnsavedChanges = false;
   let isProgrammaticFocus = false; // Track programmatic focus to prevent click toggle
+  let activeTab: 'edit' | 'history' = 'edit';
 
   let lastTopicId: string | null = null;
 
@@ -165,6 +167,22 @@
         .catch(error => console.error('Failed to save on blur:', error));
     }
   }
+
+  function handleRestore(content: string) {
+    editorContent = content;
+    activeTab = 'edit';
+    isViewMode = false; // Switch to edit mode so they can save if they want, or maybe just view it?
+    // Let's autosave it or just put it in editor?
+    // User probably wants to USE it.
+    // Let's update the topic content immediately to "restore" it fully.
+    if ($activeTopicId) {
+       updateTopicContent($activeTopicId, content).catch(console.error);
+    }
+  }
+
+  function formatDate(isoString: string) {
+    return new Date(isoString).toLocaleString();
+  }
 </script>
 
 <div class="topic-editor-container">
@@ -172,27 +190,46 @@
     <div class="editor-header">
       <div class="header-left">
         <h3>{$activeTopic.name}</h3>
-        <div class="status-indicator">
-          {#if isSaving}
-            <span class="status-saving" title="Saving...">
-              💾 <span class="status-text">Saving...</span>
-            </span>
-          {:else if hasUnsavedChanges}
-            <span class="status-unsaved" title="Unsaved changes">
-              ⚠️ <span class="status-text">Unsaved</span>
-            </span>
-          {:else if isViewMode}
-            <span class="status-view" title="View mode - Press Ctrl+e to edit">
-              👁️ <span class="status-text">View</span>
-            </span>
-          {:else}
-            <span class="status-edit" title="Edit mode">
-              ✏️ <span class="status-text">Edit</span>
-            </span>
-          {/if}
+        <div class="editor-tabs">
+          <button 
+            class="tab-btn {activeTab === 'edit' ? 'active' : ''}" 
+            on:click={() => activeTab = 'edit'}
+          >
+            Edit
+          </button>
+          <button 
+            class="tab-btn {activeTab === 'history' ? 'active' : ''}" 
+            on:click={() => activeTab = 'history'}
+          >
+            History
+            {#if $activeTopic.history && $activeTopic.history.length > 0}
+              <span class="count">{$activeTopic.history.length}</span>
+            {/if}
+          </button>
         </div>
       </div>
       <div class="header-right">
+        {#if activeTab === 'edit'}
+          <div class="status-indicator">
+            {#if isSaving}
+              <span class="status-saving" title="Saving...">
+                💾 <span class="status-text">Saving...</span>
+              </span>
+            {:else if hasUnsavedChanges}
+              <span class="status-unsaved" title="Unsaved changes">
+                ⚠️ <span class="status-text">Unsaved</span>
+              </span>
+            {:else if isViewMode}
+              <span class="status-view" title="View mode - Press Ctrl+e to edit">
+                👁️ <span class="status-text">View</span>
+              </span>
+            {:else}
+              <span class="status-edit" title="Edit mode">
+                ✏️ <span class="status-text">Edit</span>
+              </span>
+            {/if}
+          </div>
+        {/if}
         <span class="section-name">{$activeTopic.sectionName}</span>
         <button class="mode-toggle-btn" on:click={toggleEditMode} title="Press Ctrl+e to toggle">
           {#if isViewMode}
@@ -210,37 +247,65 @@
     {/if}
     
     <div class="editor-wrapper">
-      <!-- Always render the textarea, just change its state -->
-      <textarea
-        bind:this={textareaElement}
-        id="topic-editor"
-        class="topic-editor"
-        class:readonly-mode={isViewMode}
-        bind:value={editorContent}
-        on:input={handleInput}
-        on:keydown={handleKeydown}
-        on:focus={handleFocus}
-        on:blur={handleBlur}
-        on:click={() => {
-          console.log('Textarea clicked!');
-          // Only auto-switch if we're in view mode AND not handling programmatic focus
-          if (isViewMode && !isProgrammaticFocus) {
-            console.log('In view mode, auto-switching to edit mode');
-            toggleEditMode();
-          }
-        }}
-        placeholder="Start writing your prompt here..."
-        spellcheck="false"
-        tabindex="0"
-        autocomplete="off"
-        autocapitalize="off"
-        autocorrect="off"
-        readonly={isViewMode}
-      ></textarea>
-      
-      {#if isViewMode}
-        <div class="view-mode-overlay">
-          <p>Press <kbd>Ctrl+e</kbd> or click the Edit button to edit this topic</p>
+      {#if activeTab === 'edit'}
+        <!-- Always render the textarea, just change its state -->
+        <textarea
+          bind:this={textareaElement}
+          id="topic-editor"
+          class="topic-editor"
+          class:readonly-mode={isViewMode}
+          bind:value={editorContent}
+          on:input={handleInput}
+          on:keydown={handleKeydown}
+          on:focus={handleFocus}
+          on:blur={handleBlur}
+          on:click={() => {
+            console.log('Textarea clicked!');
+            // Only auto-switch if we're in view mode AND not handling programmatic focus
+            if (isViewMode && !isProgrammaticFocus) {
+              console.log('In view mode, auto-switching to edit mode');
+              toggleEditMode();
+            }
+          }}
+          placeholder="Start writing your prompt here..."
+          spellcheck="false"
+          tabindex="0"
+          autocomplete="off"
+          autocapitalize="off"
+          autocorrect="off"
+          readonly={isViewMode}
+        ></textarea>
+        
+        {#if isViewMode}
+          <div class="view-mode-overlay">
+            <p>Press <kbd>Ctrl+e</kbd> or click the Edit button to edit this topic</p>
+          </div>
+        {/if}
+      {:else}
+        <div class="history-view">
+          {#if $activeTopic.history && $activeTopic.history.length > 0}
+            <div class="history-list">
+              {#each [...$activeTopic.history].reverse() as item}
+                <div class="history-item">
+                  <div class="history-meta">
+                    <span class="history-time">{formatDate(item.timestamp)}</span>
+                    <button class="restore-btn" on:click={() => handleRestore(item.refined_content)}>
+                      Restore this version
+                    </button>
+                  </div>
+                  <div class="history-content-preview">
+                    <pre>{item.refined_content}</pre>
+                  </div>
+                </div>
+              {/each}
+            </div>
+          {:else}
+            <div class="empty-history">
+              <span class="empty-icon">⏳</span>
+              <h3>No History Yet</h3>
+              <p>Refine this topic with AI to generate history versions.</p>
+            </div>
+          {/if}
         </div>
       {/if}
     </div>
@@ -544,5 +609,129 @@
     font-weight: 500;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
     z-index: 1000;
+  }
+
+  .editor-tabs {
+    display: flex;
+    background-color: #2d3748;
+    padding: 0.25rem;
+    border-radius: 0.375rem;
+    margin-left: 1rem;
+  }
+
+  .tab-btn {
+    padding: 0.25rem 0.75rem;
+    border-radius: 0.25rem;
+    font-size: 0.75rem;
+    color: #a0aec0;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .tab-btn:hover {
+    color: #e2e8f0;
+  }
+
+  .tab-btn.active {
+    background-color: #4a5568;
+    color: white;
+    font-weight: 600;
+  }
+
+  .count {
+    background-color: #1a202c;
+    padding: 0.1rem 0.4rem;
+    border-radius: 999px;
+    font-size: 0.65rem;
+  }
+
+  .history-view {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1.5rem;
+  }
+
+  .history-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  .history-item {
+    background-color: #1a202c;
+    border: 1px solid #2d3748;
+    border-radius: 0.5rem;
+    overflow: hidden;
+  }
+
+  .history-meta {
+    padding: 0.75rem 1rem;
+    background-color: #2d3748;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .history-time {
+    font-size: 0.75rem;
+    color: #a0aec0;
+  }
+
+  .restore-btn {
+    padding: 0.25rem 0.75rem;
+    background-color: #4a5568;
+    color: white;
+    border: none;
+    border-radius: 0.25rem;
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: background-color 0.2s;
+  }
+
+  .restore-btn:hover {
+    background-color: #2c5282;
+  }
+
+  .history-content-preview {
+    padding: 1rem;
+    margin: 0;
+    background-color: #0d1117;
+    overflow-x: auto;
+  }
+
+  .history-content-preview pre {
+    margin: 0;
+    font-family: 'Fira Code', 'Monaco', 'Consolas', monospace;
+    font-size: 0.875rem;
+    line-height: 1.6;
+    color: #e2e8f0;
+    white-space: pre-wrap;
+  }
+
+  .empty-history {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 3rem;
+    color: #718096;
+    text-align: center;
+  }
+
+  .empty-history .empty-icon {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+    opacity: 0.5;
+  }
+
+  .empty-history h3 {
+    margin: 0 0 0.5rem 0;
+    color: #e2e8f0;
+    font-size: 1.125rem;
   }
 </style>

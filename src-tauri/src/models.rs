@@ -87,6 +87,8 @@ pub struct Project {
     pub sections: Vec<Section>,
     pub created_at: String,
     pub updated_at: String,
+    #[serde(default)]
+    pub history: Vec<Refinement>,
 }
 
 impl Project {
@@ -98,6 +100,7 @@ impl Project {
             sections: Vec::new(),
             created_at: now.clone(),
             updated_at: now,
+            history: Vec::new(),
         }
     }
 
@@ -204,6 +207,10 @@ impl Project {
             .collect::<Vec<String>>()
             .join("\n\n---\n\n")
     }
+
+    pub fn add_refinement(&mut self, refinement: Refinement) {
+        self.history.push(refinement);
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -212,6 +219,8 @@ pub struct Section {
     pub name: String,
     pub order_index: usize,
     pub topics: Vec<Topic>,
+    #[serde(default)]
+    pub history: Vec<Refinement>,
 }
 
 impl Section {
@@ -221,6 +230,7 @@ impl Section {
             name,
             order_index: 0,
             topics: Vec::new(),
+            history: Vec::new(),
         }
     }
 
@@ -277,6 +287,18 @@ impl Section {
 
         Ok(())
     }
+
+    pub fn add_refinement(&mut self, refinement: Refinement) {
+        self.history.push(refinement);
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Refinement {
+    pub id: String,
+    pub original_content: String,
+    pub refined_content: String,
+    pub timestamp: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -286,6 +308,8 @@ pub struct Topic {
     pub content: String,
     pub order_index: usize,
     pub section_id: String,
+    #[serde(default)] // For backward compatibility
+    pub history: Vec<Refinement>,
 }
 
 impl Topic {
@@ -296,6 +320,11 @@ impl Topic {
             content,
             order_index: 0,
             section_id,
+            history: Vec::new(),
         }
+    }
+
+    pub fn add_refinement(&mut self, refinement: Refinement) {
+        self.history.push(refinement);
     }
 }

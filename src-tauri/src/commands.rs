@@ -1,4 +1,4 @@
-use crate::models::{Workspace, Project, Section, Topic};
+use crate::models::{Workspace, Project, Section, Topic, Refinement};
 use crate::state::AppState;
 use std::fs;
 use std::path::PathBuf;
@@ -277,6 +277,73 @@ pub fn get_merged_output(state: State<AppState>) -> Result<String, String> {
     let project = workspace.get_active_project()
         .ok_or("No active project found".to_string())?;
     Ok(project.get_merged_output())
+}
+
+#[tauri::command]
+pub fn save_topic_refinement(
+    state: State<AppState>,
+    topic_id: String,
+    refinement: Refinement,
+) -> Result<(), String> {
+    let mut workspace = state.workspace.lock().unwrap();
+    let project = workspace.get_active_project_mut()
+        .ok_or("No active project found".to_string())?;
+
+    if let Some(topic) = project.get_topic_mut(&topic_id) {
+        topic.add_refinement(refinement);
+        project.updated_at = chrono::Utc::now().to_rfc3339();
+
+        if let Err(e) = save_workspace(&workspace, &state.data_dir) {
+            return Err(format!("Failed to save workspace: {}", e));
+        }
+
+        Ok(())
+    } else {
+        Err(format!("Topic with id {} not found", topic_id))
+    }
+}
+
+#[tauri::command]
+pub fn save_section_refinement(
+    state: State<AppState>,
+    section_id: String,
+    refinement: Refinement,
+) -> Result<(), String> {
+    let mut workspace = state.workspace.lock().unwrap();
+    let project = workspace.get_active_project_mut()
+        .ok_or("No active project found".to_string())?;
+
+    if let Some(section) = project.get_section_mut(&section_id) {
+        section.add_refinement(refinement);
+        project.updated_at = chrono::Utc::now().to_rfc3339();
+
+        if let Err(e) = save_workspace(&workspace, &state.data_dir) {
+            return Err(format!("Failed to save workspace: {}", e));
+        }
+
+        Ok(())
+    } else {
+        Err(format!("Section with id {} not found", section_id))
+    }
+}
+
+#[tauri::command]
+pub fn save_project_refinement(
+    state: State<AppState>,
+    refinement: Refinement,
+) -> Result<(), String> {
+    let mut workspace = state.workspace.lock().unwrap();
+    let project = workspace.get_active_project_mut()
+        .ok_or("No active project found".to_string())?;
+
+    project.add_refinement(refinement);
+    project.updated_at = chrono::Utc::now().to_rfc3339();
+
+    if let Err(e) = save_workspace(&workspace, &state.data_dir) {
+        return Err(format!("Failed to save workspace: {}", e));
+    }
+
+    Ok(())
 }
 
 use tauri::Emitter;

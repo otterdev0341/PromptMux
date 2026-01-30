@@ -10,7 +10,7 @@
 
   let showHelpModal = false;
   let showRefineModal = false;
-  let refineTarget: 'topic' | 'merged' | null = null;
+  let refineTarget: 'topic' | 'section' | 'merged' | null = null;
   let isLeaderActive = false;
   let leaderTimeout: number | null = null;
   let sidebarComponent: Sidebar;
@@ -197,6 +197,11 @@
     showRefineModal = true;
     refineTarget = 'topic';
   }
+
+  function handleRefineSection() {
+    showRefineModal = true;
+    refineTarget = 'section';
+  }
 </script>
 
 <div class="app-container">
@@ -218,6 +223,7 @@
       id="main-editor"
       {showEditor}
       on:refineTopic={openRefineModal}
+      on:refineSection={handleRefineSection}
     />
   </div>
 </div>

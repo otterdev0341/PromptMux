@@ -80,7 +80,8 @@
     focused = false;
   }
 
-  function handleKeydown(e: KeyboardEvent) {
+  function handleKeydown(event: Event) {
+    const e = event as KeyboardEvent;
     if (!focused) return;
 
     // Focus on active item
@@ -218,6 +219,92 @@
       startEditing(item.id, item.name);
     }
   }
+
+  async function handleDrop(e: DragEvent, targetItem: typeof flatItems[0]) {
+    e.preventDefault();
+    
+    if (!draggedItem || !dragOverItem || draggedItem.id === targetItem.id) {
+      draggedItem = null;
+      dragOverItem = null;
+      return;
+    }
+
+    // Ensure we're dropping on a valid target
+    if (draggedItem.type !== targetItem.type) {
+      draggedItem = null;
+      dragOverItem = null;
+      return;
+    }
+
+    // For topics, ensure they're in the same section
+    if (draggedItem.type === 'topic' && draggedItem.sectionId !== targetItem.sectionId) {
+      draggedItem = null;
+      dragOverItem = null;
+      return;
+    }
+
+    try {
+      if (draggedItem.type === 'section') {
+        // Reorder sections
+        const currentIndex = sections.findIndex(s => s.id === draggedItem!.id);
+        const targetIndex = sections.findIndex(s => s.id === targetItem.id);
+        
+        if (currentIndex !== -1 && targetIndex !== -1) {
+          // Calculate new index with Rust backend adjustment
+          let newIndex = targetIndex;
+          if (newIndex > currentIndex) {
+            newIndex += 1; // Account for Rust backend's -1 adjustment
+          }
+          await reorderItem('section', draggedItem!.id, newIndex);
+        }
+      } else if (draggedItem.type === 'topic') {
+        // Reorder topics within the same section
+        const section = sections.find(s => s.id === draggedItem!.sectionId);
+        if (section) {
+          const currentIndex = section.topics.findIndex(t => t.id === draggedItem!.id);
+          const targetIndex = section.topics.findIndex(t => t.id === targetItem.id);
+          
+          if (currentIndex !== -1 && targetIndex !== -1) {
+            // Calculate new index with Rust backend adjustment
+            let newIndex = targetIndex;
+            if (newIndex > currentIndex) {
+              newIndex += 1; // Account for Rust backend's -1 adjustment
+            }
+            await reorderItem('topic', draggedItem!.id, newIndex);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Failed to reorder item:', error);
+    }
+
+    draggedItem = null;
+    dragOverItem = null;
+  }
+
+  function handleDragEnd() {
+    draggedItem = null;
+    dragOverItem = null;
+  }
+
+  export let id: string = '';
+
+  export function startEditingActive() {
+    // Find active topic or section and start editing
+    if ($activeTopicId) {
+      const topic = flatItems.find(i => i.id === $activeTopicId && i.type === 'topic');
+      if (topic) {
+        startEditing(topic.id, topic.name);
+      }
+    } else if ($activeSectionId) {
+      const section = flatItems.find(i => i.id === $activeSectionId && i.type === 'section');
+      if (section) {
+        startEditing(section.id, section.name);
+      }
+    }
+  }
+
+
 
   function startEditing(id: string, name: string) {
     editingItemId = id;
@@ -388,88 +475,13 @@
     dragOverItem = null;
   }
 
-  async function handleDrop(e: DragEvent, targetItem: typeof flatItems[0]) {
-    e.preventDefault();
-    
-    if (!draggedItem || !dragOverItem || draggedItem.id === targetItem.id) {
-      draggedItem = null;
-      dragOverItem = null;
-      return;
-    }
 
-    // Ensure we're dropping on a valid target
-    if (draggedItem.type !== targetItem.type) {
-      draggedItem = null;
-      dragOverItem = null;
-      return;
-    }
-
-    // For topics, ensure they're in the same section
-    if (draggedItem.type === 'topic' && draggedItem.sectionId !== targetItem.sectionId) {
-      draggedItem = null;
-      dragOverItem = null;
-      return;
-    }
-
-    try {
-      if (draggedItem.type === 'section') {
-        // Reorder sections
-        const currentIndex = sections.findIndex(s => s.id === draggedItem.id);
-        const targetIndex = sections.findIndex(s => s.id === targetItem.id);
-        
-        if (currentIndex !== -1 && targetIndex !== -1) {
-          // Calculate new index with Rust backend adjustment
-          let newIndex = targetIndex;
-          if (newIndex > currentIndex) {
-            newIndex += 1; // Account for Rust backend's -1 adjustment
-          }
-          await reorderItem('section', draggedItem.id, newIndex);
-        }
-      } else if (draggedItem.type === 'topic') {
-        // Reorder topics within the same section
-        const section = sections.find(s => s.id === draggedItem.sectionId);
-        if (section) {
-          const currentIndex = section.topics.findIndex(t => t.id === draggedItem.id);
-          const targetIndex = section.topics.findIndex(t => t.id === targetItem.id);
-          
-          if (currentIndex !== -1 && targetIndex !== -1) {
-            // Calculate new index with Rust backend adjustment
-            let newIndex = targetIndex;
-            if (newIndex > currentIndex) {
-              newIndex += 1; // Account for Rust backend's -1 adjustment
-            }
-            await reorderItem('topic', draggedItem.id, newIndex);
-          }
-        }
-      }
-    } catch (error) {
-      console.error('Failed to reorder item:', error);
-    }
-
-    draggedItem = null;
-    dragOverItem = null;
+  function makeSectionItem(section: Section) {
+    return { id: section.id, type: 'section' as const, name: section.name };
   }
 
-  function handleDragEnd() {
-    draggedItem = null;
-    dragOverItem = null;
-  }
-
-  export let id: string = '';
-
-  export function startEditingActive() {
-    // Find active topic or section and start editing
-    if ($activeTopicId) {
-      const topic = flatItems.find(i => i.id === $activeTopicId && i.type === 'topic');
-      if (topic) {
-        startEditing(topic.id, topic.name);
-      }
-    } else if ($activeSectionId) {
-      const section = flatItems.find(i => i.id === $activeSectionId && i.type === 'section');
-      if (section) {
-        startEditing(section.id, section.name);
-      }
-    }
+  function makeTopicItem(topic: Topic, sectionId: string) {
+    return { id: topic.id, type: 'topic' as const, name: topic.name, sectionId };
   }
 </script>
 
@@ -489,7 +501,7 @@
     {#each sections as section (section.id)}
       {@const isExpanded = expandedSections.has(section.id)}
       {@const isActive = $activeSectionId === section.id}
-      {@const sectionItem = { id: section.id, type: 'section', name: section.name }}
+      {@const sectionItem = makeSectionItem(section)}
       {@const isDragging = draggedItem?.id === section.id}
       {@const isDragOver = dragOverItem?.id === section.id}
       
@@ -539,7 +551,7 @@
           <div class="topics-list">
             {#each section.topics.sort((a, b) => a.order_index - b.order_index) as topic (topic.id)}
               {@const isTopicActive = $activeTopicId === topic.id}
-              {@const topicItem = { id: topic.id, type: 'topic', name: topic.name, sectionId: section.id }}
+              {@const topicItem = makeTopicItem(topic, section.id)}
               {@const isTopicDragging = draggedItem?.id === topic.id}
               {@const isTopicDragOver = dragOverItem?.id === topic.id}
               

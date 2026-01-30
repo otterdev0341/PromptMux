@@ -1,8 +1,9 @@
 <script lang="ts">
-  import { activeTopic, mergedOutput, updateTopicContent } from '../stores/projectStore';
+  import { activeTopic, activeSection, mergedOutput, updateTopicContent, saveTopicRefinement, saveSectionRefinement } from '../stores/projectStore';
   import { refineWithLlm } from '../stores/projectStore';
+  import type { Refinement } from '../stores/projectStore';
 
-  export let target: 'topic' | 'merged' | null = null;
+  export let target: 'topic' | 'section' | 'merged' | null = null;
   export let onClose: () => void;
 
   let loading = false;
@@ -12,6 +13,12 @@
 
   $: if (target === 'topic' && $activeTopic) {
     originalContent = $activeTopic.content;
+  } else if (target === 'section' && $activeSection) {
+     const sortedTopics = [...$activeSection.topics].sort((a, b) => a.order_index - b.order_index);
+     originalContent = sortedTopics
+        .map(topic => topic.content.trim())
+        .filter(content => content.length > 0)
+        .join('\n\n');
   } else if (target === 'merged') {
     originalContent = $mergedOutput;
   }
@@ -27,6 +34,20 @@
 
     try {
       refinedContent = await refineWithLlm(originalContent);
+      
+      const refinement: Refinement = {
+          id: crypto.randomUUID(),
+          original_content: originalContent,
+          refined_content: refinedContent,
+          timestamp: new Date().toISOString()
+      };
+
+      // Save to history based on target
+      if (target === 'topic' && $activeTopic) {
+        await saveTopicRefinement($activeTopic.id, refinement);
+      } else if (target === 'section' && $activeSection) {
+        await saveSectionRefinement($activeSection.id, refinement);
+      }
     } catch (err) {
       error = err as string;
       console.error('Failed to refine:', err);

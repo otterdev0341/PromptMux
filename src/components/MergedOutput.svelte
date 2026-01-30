@@ -1,12 +1,13 @@
 <script lang="ts">
-  import { mergedOutput } from '../stores/projectStore';
+  import { mergedOutput, projectStore, saveProjectRefinement } from '../stores/projectStore';
+  import type { Refinement } from '../stores/projectStore';
   import { invoke } from '@tauri-apps/api/core';
   import { listen } from '@tauri-apps/api/event';
   import { onDestroy } from 'svelte';
 
   let outputContent = '';
   let refinedContent = '';
-  let activeTab: 'raw' | 'refined' = 'raw';
+  let activeTab: 'raw' | 'refined' | 'history' = 'raw';
   let isRefining = false;
   let refineError = '';
   let focused = false;
@@ -33,7 +34,7 @@
     focused = false;
   }
   
-  function switchTab(tab: 'raw' | 'refined') {
+  function switchTab(tab: 'raw' | 'refined' | 'history') {
     activeTab = tab;
   }
 
@@ -88,6 +89,39 @@
       console.error('Failed to copy:', error);
     });
   }
+
+  function formatDate(isoString: string) {
+    return new Date(isoString).toLocaleString();
+  }
+
+  function handleRestore(content: string) {
+    // For merged output, "restore" mostly means copy to clipboard since we can't edit the source directly from here
+    copyToClipboard(content);
+  }
+
+  async function handleSaveToHistory() {
+    if (!refinedContent) return;
+    
+    try {
+      const refinement: Refinement = {
+          id: crypto.randomUUID(),
+          original_content: outputContent, // Approximate original
+          refined_content: refinedContent,
+          timestamp: new Date().toISOString()
+      };
+      
+      await saveProjectRefinement(refinement);
+      
+      // Feedback
+      const indicator = document.createElement('div');
+      indicator.className = 'copy-indicator';
+      indicator.textContent = 'Saved to history!';
+      document.body.appendChild(indicator);
+      setTimeout(() => indicator.remove(), 1000);
+    } catch (err) {
+      console.error('Failed to save history:', err);
+    }
+  }
 </script>
 
 <div class="merged-output-container">
@@ -104,6 +138,15 @@
         on:click={() => switchTab('refined')}
       >
         Refine Prompt ✨
+      </button>
+      <button 
+        class="tab-btn {activeTab === 'history' ? 'active' : ''}" 
+        on:click={() => switchTab('history')}
+      >
+        History
+        {#if $projectStore && $projectStore.history && $projectStore.history.length > 0}
+          <span class="count">{$projectStore.history.length}</span>
+        {/if}
       </button>
     </div>
     
@@ -130,7 +173,7 @@
         on:focus={handleFocus}
         on:blur={handleBlur}
       >{outputContent || 'Your merged prompt will appear here...'}</pre>
-    {:else}
+    {:else if activeTab === 'refined'}
       <div class="refine-container">
         {#if isRefining}
           <div class="loading-state">
@@ -147,6 +190,7 @@
            <pre class="output-content refined">{refinedContent}</pre>
            <div class="refine-actions">
              <button class="action-btn secondary" on:click={handleRefine}>Re-generate</button>
+             <button class="action-btn primary" on:click={handleSaveToHistory}>Save to History</button>
            </div>
         {:else}
            <div class="empty-state">
@@ -162,6 +206,32 @@
                <p class="hint">Add some content to your sections first.</p>
              {/if}
            </div>
+        {/if}
+      </div>
+    {:else if activeTab === 'history'}
+      <div class="history-view">
+        {#if $projectStore && $projectStore.history && $projectStore.history.length > 0}
+          <div class="history-list">
+            {#each [...$projectStore.history].reverse() as item}
+              <div class="history-item">
+                <div class="history-meta">
+                  <span class="history-time">{formatDate(item.timestamp)}</span>
+                  <button class="restore-btn" on:click={() => handleRestore(item.refined_content)}>
+                    📋 Copy to Clipboard
+                  </button>
+                </div>
+                <div class="history-content-preview">
+                  <pre>{item.refined_content}</pre>
+                </div>
+              </div>
+            {/each}
+          </div>
+        {:else}
+          <div class="empty-state">
+            <span class="empty-icon">⏳</span>
+            <h3>No History Yet</h3>
+            <p>Refine the merged output and save it to see history here.</p>
+          </div>
         {/if}
       </div>
     {/if}
@@ -355,5 +425,99 @@
     font-weight: 500;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
     z-index: 1000;
+  }
+
+  .count {
+    background-color: #2d3748;
+    color: #e2e8f0;
+    font-size: 0.75rem;
+    padding: 0.125rem 0.375rem;
+    border-radius: 9999px;
+    margin-left: 0.5rem;
+  }
+
+  .history-view {
+    flex: 1;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+  }
+
+  .history-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .history-item {
+    background-color: #1a202c;
+    border: 1px solid #2d3748;
+    border-radius: 0.5rem;
+    overflow: hidden;
+  }
+
+  .history-meta {
+    padding: 0.75rem 1rem;
+    background-color: #2d3748;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #4a5568;
+  }
+
+  .history-time {
+    color: #a0aec0;
+    font-size: 0.875rem;
+  }
+
+  .restore-btn {
+    background: none;
+    border: 1px solid #4a5568;
+    color: #e2e8f0;
+    padding: 0.25rem 0.75rem;
+    border-radius: 0.25rem;
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .restore-btn:hover {
+    background-color: #4a5568;
+  }
+
+  .history-content-preview {
+    padding: 1rem;
+    max-height: 200px;
+    overflow: hidden;
+    position: relative;
+    background-color: #0d1117;
+  }
+
+  .history-content-preview::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 40px;
+    background: linear-gradient(transparent, #0d1117);
+  }
+
+  .history-content-preview pre {
+    margin: 0;
+    font-family: 'Fira Code', 'Monaco', 'Consolas', monospace;
+    font-size: 0.875rem;
+    color: #e2e8f0;
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+
+  .empty-icon {
+    font-size: 2rem;
+    margin-bottom: 1rem;
   }
 </style>

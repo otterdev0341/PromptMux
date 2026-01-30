@@ -1,12 +1,20 @@
 import { writable, derived, get } from 'svelte/store';
 import { invoke } from '@tauri-apps/api/core';
 
+export interface Refinement {
+  id: string;
+  original_content: string;
+  refined_content: string;
+  timestamp: string;
+}
+
 export interface Topic {
   id: string;
   name: string;
   content: string;
   order_index: number;
   section_id: string;
+  history?: Refinement[];
 }
 
 export interface Section {
@@ -14,6 +22,40 @@ export interface Section {
   name: string;
   order_index: number;
   topics: Topic[];
+  history?: Refinement[];
+}
+
+
+
+
+export async function saveTopicRefinement(topicId: string, refinement: Refinement): Promise<void> {
+  try {
+    await invoke('save_topic_refinement', { topicId, refinement });
+    await loadProject();
+  } catch (error) {
+    console.error('Failed to save topic refinement:', error);
+    throw error;
+  }
+}
+
+export async function saveSectionRefinement(sectionId: string, refinement: Refinement): Promise<void> {
+  try {
+    await invoke('save_section_refinement', { sectionId, refinement });
+    await loadProject();
+  } catch (error) {
+    console.error('Failed to save section refinement:', error);
+    throw error;
+  }
+}
+
+export async function saveProjectRefinement(refinement: Refinement): Promise<void> {
+  try {
+    await invoke('save_project_refinement', { refinement });
+    await loadProject();
+  } catch (error) {
+    console.error('Failed to save project refinement:', error);
+    throw error;
+  }
 }
 
 export interface Project {
@@ -22,6 +64,7 @@ export interface Project {
   sections: Section[];
   created_at: string;
   updated_at: string;
+  history?: Refinement[];
 }
 
 export interface Workspace {
@@ -55,16 +98,16 @@ export const mergedOutput = derived(
   projectStore,
   ($project) => {
     if (!$project) return "";
-    
+
     const sortedSections = [...$project.sections].sort((a, b) => a.order_index - b.order_index);
-    
+
     return sortedSections.map(section => {
       const sortedTopics = [...section.topics].sort((a, b) => a.order_index - b.order_index);
       const topicContent = sortedTopics
         .map(topic => topic.content.trim())
         .filter(content => content.length > 0)
         .join('\n\n');
-      
+
       return `// Section: ${section.name}\n${topicContent}`;
     }).join('\n\n---\n\n');
   }
@@ -74,13 +117,21 @@ export const activeTopic = derived(
   [projectStore, activeTopicId],
   ([$project, $activeTopicId]) => {
     if (!$project || !$activeTopicId) return null;
-    
+
     for (const section of $project.sections) {
       const topic = section.topics.find(t => t.id === $activeTopicId);
       if (topic) return { ...topic, sectionName: section.name };
     }
-    
+
     return null;
+  }
+);
+
+export const activeSection = derived(
+  [projectStore, activeSectionId],
+  ([$project, $activeSectionId]) => {
+    if (!$project || !$activeSectionId) return null;
+    return $project.sections.find(s => s.id === $activeSectionId) || null;
   }
 );
 
@@ -124,11 +175,11 @@ export async function switchProject(projectId: string): Promise<Project> {
   try {
     const project = await invoke<Project>('switch_project', { projectId });
     await loadWorkspace();
-    
+
     // Clear active selections when switching projects
     activeSectionId.set(null);
     activeTopicId.set(null);
-    
+
     return project;
   } catch (error) {
     console.error('Failed to switch project:', error);
@@ -171,7 +222,7 @@ export async function deleteSection(sectionId: string): Promise<void> {
   try {
     await invoke('delete_section', { sectionId });
     await loadProject();
-    
+
     // Clear active selection if it was the deleted section
     const currentSectionId = get(activeSectionId);
     if (currentSectionId === sectionId) {
@@ -219,7 +270,7 @@ export async function deleteTopic(topicId: string): Promise<void> {
   try {
     await invoke('delete_topic', { topicId });
     await loadProject();
-    
+
     // Clear active selection if it was the deleted topic
     const currentTopicId = get(activeTopicId);
     if (currentTopicId === topicId) {

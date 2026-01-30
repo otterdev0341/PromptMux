@@ -1,6 +1,8 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
+  import { activeTopic, activeSection } from '../stores/projectStore';
   import TopicEditor from './TopicEditor.svelte';
+  import SectionEditor from './SectionEditor.svelte';
   import MergedOutput from './MergedOutput.svelte';
 
   const dispatch = createEventDispatcher();
@@ -11,11 +13,21 @@
   function handleRefineTopic() {
     dispatch('refineTopic');
   }
+
+  function handleRefineSection() {
+    dispatch('refineSection');
+  }
 </script>
 
 <div class="main-editor" {id}>
   {#if showEditor}
-    <TopicEditor on:refineTopic={handleRefineTopic} />
+    {#if $activeTopic}
+      <TopicEditor on:refineTopic={handleRefineTopic} />
+    {:else if $activeSection}
+      <SectionEditor on:refineSection={handleRefineSection} />
+    {:else}
+      <TopicEditor on:refineTopic={handleRefineTopic} />
+    {/if}
   {/if}
   <MergedOutput />
 </div>

@@ -1,0 +1,1449 @@
+
+> promptmux@0.1.0 check
+> svelte-check --tsconfig ./tsconfig.json
+
+
+====================================
+Loading svelte-check in workspace: /home/otterdev_ball/BaseDiskProject/promptMux/PromptMux
+Getting Svelte diagnostics...
+
+/home/otterdev_ball/BaseDiskProject/promptMux/PromptMux/src/components/ProjectSwitcher.svelte:101:11
+Warn: A11y: visible, non-interactive elements with an on:click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as <button type="button"> or <a> might be more appropriate. See https://svelte.dev/docs/accessibility-warnings#a11y-click-events-have-key-events for more details. (svelte)
+          {@const isActive = project.id === activeProjectId}
+          <div
+            class="project-item"
+            class:active={isActive}
+            on:click={() => handleSwitchProject(project.id)}
+            on:dblclick={() => openRenameModal(project.id, project.name)}
+          >
+            <span class="project-item-icon">{isActive ? '✓' : '📄'}</span>
+            <span class="project-item-name">{project.name}</span>
+            <span class="project-item-count">{project.sections.length} sections</span>
+            
+            {#if !isActive}
+              <div class="project-item-actions">
+                <button
+                  class="icon-btn-small"
+                  on:click|stopPropagation={() => openRenameModal(project.id, project.name)}
+                  title="Rename project"
+                >
+                  ✏️
+                </button>
+                <button
+                  class="icon-btn-small icon-btn-danger"
+                  on:click|stopPropagation={() => openDeleteModal(project.id, project.name)}
+                  title="Delete project"
+                >
+                  🗑️
+                </button>
+              </div>
+            {/if}
+          </div>
+        {/each}
+
+
+/home/otterdev_ball/BaseDiskProject/promptMux/PromptMux/src/components/ProjectSwitcher.svelte:101:11
+Warn: A11y: <div> with click, dblclick handlers must have an ARIA role (svelte)
+          {@const isActive = project.id === activeProjectId}
+          <div
+            class="project-item"
+            class:active={isActive}
+            on:click={() => handleSwitchProject(project.id)}
+            on:dblclick={() => openRenameModal(project.id, project.name)}
+          >
+            <span class="project-item-icon">{isActive ? '✓' : '📄'}</span>
+            <span class="project-item-name">{project.name}</span>
+            <span class="project-item-count">{project.sections.length} sections</span>
+            
+            {#if !isActive}
+              <div class="project-item-actions">
+                <button
+                  class="icon-btn-small"
+                  on:click|stopPropagation={() => openRenameModal(project.id, project.name)}
+                  title="Rename project"
+                >
+                  ✏️
+                </button>
+                <button
+                  class="icon-btn-small icon-btn-danger"
+                  on:click|stopPropagation={() => openDeleteModal(project.id, project.name)}
+                  title="Delete project"
+                >
+                  🗑️
+                </button>
+              </div>
+            {/if}
+          </div>
+        {/each}
+
+
+/home/otterdev_ball/BaseDiskProject/promptMux/PromptMux/src/components/ProjectSwitcher.svelte:153:9
+Warn: A11y: Avoid using autofocus (svelte)
+        on:keydown={(e) => e.key === 'Enter' && handleCreateProject()}
+        autofocus
+      />
+
+
+/home/otterdev_ball/BaseDiskProject/promptMux/PromptMux/src/components/ProjectSwitcher.svelte:145:5
+Warn: A11y: visible, non-interactive elements with an on:click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as <button type="button"> or <a> might be more appropriate. See https://svelte.dev/docs/accessibility-warnings#a11y-click-events-have-key-events for more details. (svelte)
+  <div class="modal-backdrop" on:click={() => showNewProjectModal = false}>
+    <div class="modal-content" on:click|stopPropagation>
+      <h3>Create New Project</h3>
+      <input
+        type="text"
+        class="modal-input"
+        placeholder="Project name"
+        bind:value={newProjectName}
+        on:keydown={(e) => e.key === 'Enter' && handleCreateProject()}
+        autofocus
+      />
+      <div class="modal-actions">
+        <button class="btn btn-secondary" on:click={() => showNewProjectModal = false}>
+          Cancel
+        </button>
+        <button class="btn btn-primary" on:click={handleCreateProject}>
+          Create
+        </button>
+      </div>
+    </div>
+  </div>
+
+
+/home/otterdev_ball/BaseDiskProject/promptMux/PromptMux/src/components/ProjectSwitcher.svelte:145:5
+Warn: A11y: <div> with click handler must have an ARIA role (svelte)
+  <div class="modal-backdrop" on:click={() => showNewProjectModal = false}>
+    <div class="modal-content" on:click|stopPropagation>
+      <h3>Create New Project</h3>
+      <input
+        type="text"
+        class="modal-input"
+        placeholder="Project name"
+        bind:value={newProjectName}
+        on:keydown={(e) => e.key === 'Enter' && handleCreateProject()}
+        autofocus
+      />
+      <div class="modal-actions">
+        <button class="btn btn-secondary" on:click={() => showNewProjectModal = false}>
+          Cancel
+        </button>
+        <button class="btn btn-primary" on:click={handleCreateProject}>
+          Create
+        </button>
+      </div>
+    </div>
+  </div>
+
+
+/home/otterdev_ball/BaseDiskProject/promptMux/PromptMux/src/components/ProjectSwitcher.svelte:144:3
+Warn: A11y: visible, non-interactive elements with an on:click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as <button type="button"> or <a> might be more appropriate. See https://svelte.dev/docs/accessibility-warnings#a11y-click-events-have-key-events for more details. (svelte)
+{#if showNewProjectModal}
+  <div class="modal-backdrop" on:click={() => showNewProjectModal = false}>
+    <div class="modal-content" on:click|stopPropagation>
+      <h3>Create New Project</h3>
+      <input
+        type="text"
+        class="modal-input"
+        placeholder="Project name"
+        bind:value={newProjectName}
+        on:keydown={(e) => e.key === 'Enter' && handleCreateProject()}
+        autofocus
+      />
+      <div class="modal-actions">
+        <button class="btn btn-secondary" on:click={() => showNewProjectModal = false}>
+          Cancel
+        </button>
+        <button class="btn btn-primary" on:click={handleCreateProject}>
+          Create
+        </button>
+      </div>
+    </div>
+  </div>
+{/if}
+
+
+/home/otterdev_ball/BaseDiskProject/promptMux/PromptMux/src/components/ProjectSwitcher.svelte:144:3
+Warn: A11y: <div> with click handler must have an ARIA role (svelte)
+{#if showNewProjectModal}
+  <div class="modal-backdrop" on:click={() => showNewProjectModal = false}>
+    <div class="modal-content" on:click|stopPropagation>
+      <h3>Create New Project</h3>
+      <input
+        type="text"
+        class="modal-input"
+        placeholder="Project name"
+        bind:value={newProjectName}
+        on:keydown={(e) => e.key === 'Enter' && handleCreateProject()}
+        autofocus
+      />
+      <div class="modal-actions">
+        <button class="btn btn-secondary" on:click={() => showNewProjectModal = false}>
+          Cancel
+        </button>
+        <button class="btn btn-primary" on:click={handleCreateProject}>
+          Create
+        </button>
+      </div>
+    </div>
+  </div>
+{/if}
+
+
+/home/otterdev_ball/BaseDiskProject/promptMux/PromptMux/src/components/ProjectSwitcher.svelte:178:9
+Warn: A11y: Avoid using autofocus (svelte)
+        on:keydown={(e) => e.key === 'Enter' && handleRenameProject()}
+        autofocus
+      />
+
+
+/home/otterdev_ball/BaseDiskProject/promptMux/PromptMux/src/components/ProjectSwitcher.svelte:170:5
+Warn: A11y: visible, non-interactive elements with an on:click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as <button type="button"> or <a> might be more appropriate. See https://svelte.dev/docs/accessibility-warnings#a11y-click-events-have-key-events for more details. (svelte)
+  <div class="modal-backdrop" on:click={() => showRenameModal = false}>
+    <div class="modal-content" on:click|stopPropagation>
+      <h3>Rename Project</h3>
+      <input
+        type="text"
+        class="modal-input"
+        placeholder="Project name"
+        bind:value={renameProjectName}
+        on:keydown={(e) => e.key === 'Enter' && handleRenameProject()}
+        autofocus
+      />
+      <div class="modal-actions">
+        <button class="btn btn-secondary" on:click={() => showRenameModal = false}>
+          Cancel
+        </button>
+        <button class="btn btn-primary" on:click={handleRenameProject}>
+          Rename
+        </button>
+      </div>
+    </div>
+  </div>
+
+
+/home/otterdev_ball/BaseDiskProject/promptMux/PromptMux/src/components/ProjectSwitcher.svelte:170:5
+Warn: A11y: <div> with click handler must have an ARIA role (svelte)
+  <div class="modal-backdrop" on:click={() => showRenameModal = false}>
+    <div class="modal-content" on:click|stopPropagation>
+      <h3>Rename Project</h3>
+      <input
+        type="text"
+        class="modal-input"
+        placeholder="Project name"
+        bind:value={renameProjectName}
+        on:keydown={(e) => e.key === 'Enter' && handleRenameProject()}
+        autofocus
+      />
+      <div class="modal-actions">
+        <button class="btn btn-secondary" on:click={() => showRenameModal = false}>
+          Cancel
+        </button>
+        <button class="btn btn-primary" on:click={handleRenameProject}>
+          Rename
+        </button>
+      </div>
+    </div>
+  </div>
+
+
+/home/otterdev_ball/BaseDiskProject/promptMux/PromptMux/src/components/ProjectSwitcher.svelte:169:3
+Warn: A11y: visible, non-interactive elements with an on:click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as <button type="button"> or <a> might be more appropriate. See https://svelte.dev/docs/accessibility-warnings#a11y-click-events-have-key-events for more details. (svelte)
+{#if showRenameModal}
+  <div class="modal-backdrop" on:click={() => showRenameModal = false}>
+    <div class="modal-content" on:click|stopPropagation>
+      <h3>Rename Project</h3>
+      <input
+        type="text"
+        class="modal-input"
+        placeholder="Project name"
+        bind:value={renameProjectName}
+        on:keydown={(e) => e.key === 'Enter' && handleRenameProject()}
+        autofocus
+      />
+      <div class="modal-actions">
+        <button class="btn btn-secondary" on:click={() => showRenameModal = false}>
+          Cancel
+        </button>
+        <button class="btn btn-primary" on:click={handleRenameProject}>
+          Rename
+        </button>
+      </div>
+    </div>
+  </div>
+{/if}
+
+
+/home/otterdev_ball/BaseDiskProject/promptMux/PromptMux/src/components/ProjectSwitcher.svelte:169:3
+Warn: A11y: <div> with click handler must have an ARIA role (svelte)
+{#if showRenameModal}
+  <div class="modal-backdrop" on:click={() => showRenameModal = false}>
+    <div class="modal-content" on:click|stopPropagation>
+      <h3>Rename Project</h3>
+      <input
+        type="text"
+        class="modal-input"
+        placeholder="Project name"
+        bind:value={renameProjectName}
+        on:keydown={(e) => e.key === 'Enter' && handleRenameProject()}
+        autofocus
+      />
+      <div class="modal-actions">
+        <button class="btn btn-secondary" on:click={() => showRenameModal = false}>
+          Cancel
+        </button>
+        <button class="btn btn-primary" on:click={handleRenameProject}>
+          Rename
+        </button>
+      </div>
+    </div>
+  </div>
+{/if}
+
+
+/home/otterdev_ball/BaseDiskProject/promptMux/PromptMux/src/components/ProjectSwitcher.svelte:195:5
+Warn: A11y: visible, non-interactive elements with an on:click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as <button type="button"> or <a> might be more appropriate. See https://svelte.dev/docs/accessibility-warnings#a11y-click-events-have-key-events for more details. (svelte)
+  <div class="modal-backdrop" on:click={() => showDeleteModal = false}>
+    <div class="modal-content" on:click|stopPropagation>
+      <h3>Confirm Delete</h3>
+      <p class="delete-message">
+        Are you sure you want to delete the project <strong>"{deleteProjectName}"</strong>?
+      </p>
+      <p class="delete-warning">⚠️ This will permanently delete all sections and topics in this project.</p>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" on:click={() => showDeleteModal = false}>
+          Cancel
+        </button>
+        <button class="btn btn-danger" on:click={handleDeleteProject}>
+          Delete
+        </button>
+      </div>
+    </div>
+  </div>
+
+
+/home/otterdev_ball/BaseDiskProject/promptMux/PromptMux/src/components/ProjectSwitcher.svelte:195:5
+Warn: A11y: <div> with click handler must have an ARIA role (svelte)
+  <div class="modal-backdrop" on:click={() => showDeleteModal = false}>
+    <div class="modal-content" on:click|stopPropagation>
+      <h3>Confirm Delete</h3>
+      <p class="delete-message">
+        Are you sure you want to delete the project <strong>"{deleteProjectName}"</strong>?
+      </p>
+      <p class="delete-warning">⚠️ This will permanently delete all sections and topics in this project.</p>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" on:click={() => showDeleteModal = false}>
+          Cancel
+        </button>
+        <button class="btn btn-danger" on:click={handleDeleteProject}>
+          Delete
+        </button>
+      </div>
+    </div>
+  </div>
+
+
+/home/otterdev_ball/BaseDiskProject/promptMux/PromptMux/src/components/ProjectSwitcher.svelte:194:3
+Warn: A11y: visible, non-interactive elements with an on:click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as <button type="button"> or <a> might be more appropriate. See https://svelte.dev/docs/accessibility-warnings#a11y-click-events-have-key-events for more details. (svelte)
+{#if showDeleteModal}
+  <div class="modal-backdrop" on:click={() => showDeleteModal = false}>
+    <div class="modal-content" on:click|stopPropagation>
+      <h3>Confirm Delete</h3>
+      <p class="delete-message">
+        Are you sure you want to delete the project <strong>"{deleteProjectName}"</strong>?
+      </p>
+      <p class="delete-warning">⚠️ This will permanently delete all sections and topics in this project.</p>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" on:click={() => showDeleteModal = false}>
+          Cancel
+        </button>
+        <button class="btn btn-danger" on:click={handleDeleteProject}>
+          Delete
+        </button>
+      </div>
+    </div>
+  </div>
+{/if}
+
+
+/home/otterdev_ball/BaseDiskProject/promptMux/PromptMux/src/components/ProjectSwitcher.svelte:194:3
+Warn: A11y: <div> with click handler must have an ARIA role (svelte)
+{#if showDeleteModal}
+  <div class="modal-backdrop" on:click={() => showDeleteModal = false}>
+    <div class="modal-content" on:click|stopPropagation>
+      <h3>Confirm Delete</h3>
+      <p class="delete-message">
+        Are you sure you want to delete the project <strong>"{deleteProjectName}"</strong>?
+      </p>
+      <p class="delete-warning">⚠️ This will permanently delete all sections and topics in this project.</p>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" on:click={() => showDeleteModal = false}>
+          Cancel
+        </button>
+        <button class="btn btn-danger" on:click={handleDeleteProject}>
+          Delete
+        </button>
+      </div>
+    </div>
+  </div>
+{/if}
+
+
+/home/otterdev_ball/BaseDiskProject/promptMux/PromptMux/src/components/Toolbar.svelte:117:9
+Warn: A11y: Avoid using autofocus (svelte)
+        on:keydown={handleKeydown}
+        autofocus
+      />
+
+
+/home/otterdev_ball/BaseDiskProject/promptMux/PromptMux/src/components/Toolbar.svelte:109:5
+Warn: A11y: visible, non-interactive elements with an on:click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as <button type="button"> or <a> might be more appropriate. See https://svelte.dev/docs/accessibility-warnings#a11y-click-events-have-key-events for more details. (svelte)
+  <div class="modal-backdrop" on:click={cancelNewSection}>
+    <div class="modal-content" on:click|stopPropagation>
+      <h3>Create New Section</h3>
+      <input
+        type="text"
+        class="input"
+        bind:value={newSectionName}
+        placeholder="Section name..."
+        on:keydown={handleKeydown}
+        autofocus
+      />
+      <div class="modal-actions">
+        <button class="btn btn-secondary" on:click={cancelNewSection}>Cancel</button>
+        <button class="btn btn-primary" on:click={confirmNewSection}>Create</button>
+      </div>
+    </div>
+  </div>
+
+
+/home/otterdev_ball/BaseDiskProject/promptMux/PromptMux/src/components/Toolbar.svelte:109:5
+Warn: A11y: <div> with click handler must have an ARIA role (svelte)
+  <div class="modal-backdrop" on:click={cancelNewSection}>
+    <div class="modal-content" on:click|stopPropagation>
+      <h3>Create New Section</h3>
+      <input
+        type="text"
+        class="input"
+        bind:value={newSectionName}
+        placeholder="Section name..."
+        on:keydown={handleKeydown}
+        autofocus
+      />
+      <div class="modal-actions">
+        <button class="btn btn-secondary" on:click={cancelNewSection}>Cancel</button>
+        <button class="btn btn-primary" on:click={confirmNewSection}>Create</button>
+      </div>
+    </div>
+  </div>
+
+
+/home/otterdev_ball/BaseDiskProject/promptMux/PromptMux/src/components/Toolbar.svelte:108:3
+Warn: A11y: visible, non-interactive elements with an on:click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as <button type="button"> or <a> might be more appropriate. See https://svelte.dev/docs/accessibility-warnings#a11y-click-events-have-key-events for more details. (svelte)
+{#if showNewSectionDialog}
+  <div class="modal-backdrop" on:click={cancelNewSection}>
+    <div class="modal-content" on:click|stopPropagation>
+      <h3>Create New Section</h3>
+      <input
+        type="text"
+        class="input"
+        bind:value={newSectionName}
+        placeholder="Section name..."
+        on:keydown={handleKeydown}
+        autofocus
+      />
+      <div class="modal-actions">
+        <button class="btn btn-secondary" on:click={cancelNewSection}>Cancel</button>
+        <button class="btn btn-primary" on:click={confirmNewSection}>Create</button>
+      </div>
+    </div>
+  </div>
+{/if}
+
+
+/home/otterdev_ball/BaseDiskProject/promptMux/PromptMux/src/components/Toolbar.svelte:108:3
+Warn: A11y: <div> with click handler must have an ARIA role (svelte)
+{#if showNewSectionDialog}
+  <div class="modal-backdrop" on:click={cancelNewSection}>
+    <div class="modal-content" on:click|stopPropagation>
+      <h3>Create New Section</h3>
+      <input
+        type="text"
+        class="input"
+        bind:value={newSectionName}
+        placeholder="Section name..."
+        on:keydown={handleKeydown}
+        autofocus
+      />
+      <div class="modal-actions">
+        <button class="btn btn-secondary" on:click={cancelNewSection}>Cancel</button>
+        <button class="btn btn-primary" on:click={confirmNewSection}>Create</button>
+      </div>
+    </div>
+  </div>
+{/if}
+
+
+/home/otterdev_ball/BaseDiskProject/promptMux/PromptMux/src/components/Toolbar.svelte:127:8
+Warn: Unused CSS selector ".project-name" (svelte)
+
+<style>
+  .toolbar {
+
+
+/home/otterdev_ball/BaseDiskProject/promptMux/PromptMux/src/components/Sidebar.svelte:537:15
+Warn: A11y: <span> with dblclick handler must have an ARIA role (svelte)
+            {:else}
+              <span class="name" on:dblclick|stopPropagation={() => startEditing(section.id, section.name)}>{section.name}</span>
+            {/if}
+
+
+/home/otterdev_ball/BaseDiskProject/promptMux/PromptMux/src/components/Sidebar.svelte:510:11
+Warn: A11y: visible, non-interactive elements with an on:click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as <button type="button"> or <a> might be more appropriate. See https://svelte.dev/docs/accessibility-warnings#a11y-click-events-have-key-events for more details. (svelte)
+        <div class="item-row-wrapper">
+          <div
+            class="item-row"
+            class:highlighted={flatItems[highlightedIndex]?.id === section.id}
+            class:active={isActive}
+            class:dragging={isDragging}
+            class:drag-over={isDragOver}
+            draggable="true"
+            on:dragstart={(e) => handleDragStart(e, sectionItem)}
+            on:dragover={(e) => handleDragOver(e, sectionItem)}
+            on:dragleave={handleDragLeave}
+            on:drop={(e) => handleDrop(e, sectionItem)}
+            on:dragend={handleDragEnd}
+            on:click={() => selectItem({ id: section.id, type: 'section', name: section.name })}
+          >
+            <span class="drag-handle">⋮⋮</span>
+            <span class="icon">{getIcon('section', isExpanded)}</span>
+            {#if editingItemId === section.id}
+              <input
+                bind:this={inputElement}
+                type="text"
+                class="edit-input"
+                bind:value={editingName}
+                on:keydown={handleInputKeydown}
+                on:blur={saveEdit}
+                on:click|stopPropagation
+              />
+            {:else}
+              <span class="name" on:dblclick|stopPropagation={() => startEditing(section.id, section.name)}>{section.name}</span>
+            {/if}
+            <span class="count">{section.topics.length}</span>
+          </div>
+          <button 
+
+
+/home/otterdev_ball/BaseDiskProject/promptMux/PromptMux/src/components/Sidebar.svelte:510:11
+Warn: A11y: <div> with dragstart, dragover, dragleave, drop, dragend, click handlers must have an ARIA role (svelte)
+        <div class="item-row-wrapper">
+          <div
+            class="item-row"
+            class:highlighted={flatItems[highlightedIndex]?.id === section.id}
+            class:active={isActive}
+            class:dragging={isDragging}
+            class:drag-over={isDragOver}
+            draggable="true"
+            on:dragstart={(e) => handleDragStart(e, sectionItem)}
+            on:dragover={(e) => handleDragOver(e, sectionItem)}
+            on:dragleave={handleDragLeave}
+            on:drop={(e) => handleDrop(e, sectionItem)}
+            on:dragend={handleDragEnd}
+            on:click={() => selectItem({ id: section.id, type: 'section', name: section.name })}
+          >
+            <span class="drag-handle">⋮⋮</span>
+            <span class="icon">{getIcon('section', isExpanded)}</span>
+            {#if editingItemId === section.id}
+              <input
+                bind:this={inputElement}
+                type="text"
+                class="edit-input"
+                bind:value={editingName}
+                on:keydown={handleInputKeydown}
+                on:blur={saveEdit}
+                on:click|stopPropagation
+              />
+            {:else}
+              <span class="name" on:dblclick|stopPropagation={() => startEditing(section.id, section.name)}>{section.name}</span>
+            {/if}
+            <span class="count">{section.topics.length}</span>
+          </div>
+          <button 
+
+
+/home/otterdev_ball/BaseDiskProject/promptMux/PromptMux/src/components/Sidebar.svelte:591:21
+Warn: A11y: <span> with dblclick handler must have an ARIA role (svelte)
+                  {:else}
+                    <span class="name" on:dblclick|stopPropagation={() => startEditing(topic.id, topic.name)}>{topic.name}</span>
+                  {/if}
+
+
+/home/otterdev_ball/BaseDiskProject/promptMux/PromptMux/src/components/Sidebar.svelte:559:17
+Warn: A11y: visible, non-interactive elements with an on:click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as <button type="button"> or <a> might be more appropriate. See https://svelte.dev/docs/accessibility-warnings#a11y-click-events-have-key-events for more details. (svelte)
+              <div class="item-row-wrapper">
+                <div
+                  class="item-row topic"
+                  class:highlighted={flatItems[highlightedIndex]?.id === topic.id}
+                  class:active={isTopicActive}
+                  class:dragging={isTopicDragging}
+                  class:drag-over={isTopicDragOver}
+                  draggable="true"
+                  on:dragstart={(e) => handleDragStart(e, topicItem)}
+                  on:dragover={(e) => handleDragOver(e, topicItem)}
+                  on:dragleave={handleDragLeave}
+                  on:drop={(e) => handleDrop(e, topicItem)}
+                  on:dragend={handleDragEnd}
+                  on:click={() => selectItem({
+                    id: topic.id,
+                    type: 'topic',
+                    name: topic.name,
+                    sectionId: section.id
+                  })}
+                >
+                  <span class="drag-handle">⋮⋮</span>
+                  <span class="icon indent">{getIcon('topic')}</span>
+                  {#if editingItemId === topic.id}
+                    <input
+                      bind:this={inputElement}
+                      type="text"
+                      class="edit-input"
+                      bind:value={editingName}
+                      on:keydown={handleInputKeydown}
+                      on:blur={saveEdit}
+                      on:click|stopPropagation
+                    />
+                  {:else}
+                    <span class="name" on:dblclick|stopPropagation={() => startEditing(topic.id, topic.name)}>{topic.name}</span>
+                  {/if}
+                </div>
+                <button 
+
+
+/home/otterdev_ball/BaseDiskProject/promptMux/PromptMux/src/components/Sidebar.svelte:559:17
+Warn: A11y: <div> with dragstart, dragover, dragleave, drop, dragend, click handlers must have an ARIA role (svelte)
+              <div class="item-row-wrapper">
+                <div
+                  class="item-row topic"
+                  class:highlighted={flatItems[highlightedIndex]?.id === topic.id}
+                  class:active={isTopicActive}
+                  class:dragging={isTopicDragging}
+                  class:drag-over={isTopicDragOver}
+                  draggable="true"
+                  on:dragstart={(e) => handleDragStart(e, topicItem)}
+                  on:dragover={(e) => handleDragOver(e, topicItem)}
+                  on:dragleave={handleDragLeave}
+                  on:drop={(e) => handleDrop(e, topicItem)}
+                  on:dragend={handleDragEnd}
+                  on:click={() => selectItem({
+                    id: topic.id,
+                    type: 'topic',
+                    name: topic.name,
+                    sectionId: section.id
+                  })}
+                >
+                  <span class="drag-handle">⋮⋮</span>
+                  <span class="icon indent">{getIcon('topic')}</span>
+                  {#if editingItemId === topic.id}
+                    <input
+                      bind:this={inputElement}
+                      type="text"
+                      class="edit-input"
+                      bind:value={editingName}
+                      on:keydown={handleInputKeydown}
+                      on:blur={saveEdit}
+                      on:click|stopPropagation
+                    />
+                  {:else}
+                    <span class="name" on:dblclick|stopPropagation={() => startEditing(topic.id, topic.name)}>{topic.name}</span>
+                  {/if}
+                </div>
+                <button 
+
+
+/home/otterdev_ball/BaseDiskProject/promptMux/PromptMux/src/components/Sidebar.svelte:488:1
+Warn: A11y: noninteractive element cannot have nonnegative tabIndex value (svelte)
+
+<div 
+  class="sidebar"
+  {id}
+  tabindex="0"
+  on:focus={handleFocus}
+  on:blur={handleBlur}
+>
+  <div class="sidebar-header">
+    <h2>Sections & Topics</h2>
+    <span class="keyboard-hint">Press Ctrl+b q for help</span>
+  </div>
+
+  <div class="sections-list">
+    {#each sections as section (section.id)}
+      {@const isExpanded = expandedSections.has(section.id)}
+      {@const isActive = $activeSectionId === section.id}
+      {@const sectionItem = makeSectionItem(section)}
+      {@const isDragging = draggedItem?.id === section.id}
+      {@const isDragOver = dragOverItem?.id === section.id}
+      
+      <div class="section-item">
+        <div class="item-row-wrapper">
+          <div
+            class="item-row"
+            class:highlighted={flatItems[highlightedIndex]?.id === section.id}
+            class:active={isActive}
+            class:dragging={isDragging}
+            class:drag-over={isDragOver}
+            draggable="true"
+            on:dragstart={(e) => handleDragStart(e, sectionItem)}
+            on:dragover={(e) => handleDragOver(e, sectionItem)}
+            on:dragleave={handleDragLeave}
+            on:drop={(e) => handleDrop(e, sectionItem)}
+            on:dragend={handleDragEnd}
+            on:click={() => selectItem({ id: section.id, type: 'section', name: section.name })}
+          >
+            <span class="drag-handle">⋮⋮</span>
+            <span class="icon">{getIcon('section', isExpanded)}</span>
+            {#if editingItemId === section.id}
+              <input
+                bind:this={inputElement}
+                type="text"
+                class="edit-input"
+                bind:value={editingName}
+                on:keydown={handleInputKeydown}
+                on:blur={saveEdit}
+                on:click|stopPropagation
+              />
+            {:else}
+              <span class="name" on:dblclick|stopPropagation={() => startEditing(section.id, section.name)}>{section.name}</span>
+            {/if}
+            <span class="count">{section.topics.length}</span>
+          </div>
+          <button 
+            class="delete-btn"
+            on:click|stopPropagation={() => promptDelete(section.id, 'section', section.name)}
+            title="Delete section"
+          >
+            🗑️
+          </button>
+        </div>
+
+        {#if isExpanded}
+          <div class="topics-list">
+            {#each section.topics.sort((a, b) => a.order_index - b.order_index) as topic (topic.id)}
+              {@const isTopicActive = $activeTopicId === topic.id}
+              {@const topicItem = makeTopicItem(topic, section.id)}
+              {@const isTopicDragging = draggedItem?.id === topic.id}
+              {@const isTopicDragOver = dragOverItem?.id === topic.id}
+              
+              <div class="item-row-wrapper">
+                <div
+                  class="item-row topic"
+                  class:highlighted={flatItems[highlightedIndex]?.id === topic.id}
+                  class:active={isTopicActive}
+                  class:dragging={isTopicDragging}
+                  class:drag-over={isTopicDragOver}
+                  draggable="true"
+                  on:dragstart={(e) => handleDragStart(e, topicItem)}
+                  on:dragover={(e) => handleDragOver(e, topicItem)}
+                  on:dragleave={handleDragLeave}
+                  on:drop={(e) => handleDrop(e, topicItem)}
+                  on:dragend={handleDragEnd}
+                  on:click={() => selectItem({
+                    id: topic.id,
+                    type: 'topic',
+                    name: topic.name,
+                    sectionId: section.id
+                  })}
+                >
+                  <span class="drag-handle">⋮⋮</span>
+                  <span class="icon indent">{getIcon('topic')}</span>
+                  {#if editingItemId === topic.id}
+                    <input
+                      bind:this={inputElement}
+                      type="text"
+                      class="edit-input"
+                      bind:value={editingName}
+                      on:keydown={handleInputKeydown}
+                      on:blur={saveEdit}
+                      on:click|stopPropagation
+                    />
+                  {:else}
+                    <span class="name" on:dblclick|stopPropagation={() => startEditing(topic.id, topic.name)}>{topic.name}</span>
+                  {/if}
+                </div>
+                <button 
+                  class="delete-btn"
+                  on:click|stopPropagation={() => promptDelete(topic.id, 'topic', topic.name)}
+                  title="Delete topic"
+                >
+                  🗑️
+                </button>
+              </div>
+            {/each}
+          </div>
+        {/if}
+      </div>
+    {/each}
+  </div>
+</div>
+
+
+
+/home/otterdev_ball/BaseDiskProject/promptMux/PromptMux/src/components/Sidebar.svelte:612:5
+Warn: A11y: visible, non-interactive elements with an on:click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as <button type="button"> or <a> might be more appropriate. See https://svelte.dev/docs/accessibility-warnings#a11y-click-events-have-key-events for more details. (svelte)
+  <div class="modal-backdrop" on:click={cancelDelete}>
+    <div class="modal-content" on:click|stopPropagation>
+      <h3>Confirm Delete</h3>
+      <p class="delete-message">
+        Are you sure you want to delete the {itemToDelete?.type} <strong>"{itemToDelete?.name}"</strong>?
+      </p>
+      {#if itemToDelete?.type === 'section'}
+        <p class="delete-warning">⚠️ This will also delete all topics within this section.</p>
+      {/if}
+      <div class="modal-actions">
+        <button class="btn btn-secondary" on:click={cancelDelete}>Cancel</button>
+        <button class="btn btn-danger" on:click={confirmDelete}>Delete</button>
+      </div>
+    </div>
+  </div>
+
+
+/home/otterdev_ball/BaseDiskProject/promptMux/PromptMux/src/components/Sidebar.svelte:612:5
+Warn: A11y: <div> with click handler must have an ARIA role (svelte)
+  <div class="modal-backdrop" on:click={cancelDelete}>
+    <div class="modal-content" on:click|stopPropagation>
+      <h3>Confirm Delete</h3>
+      <p class="delete-message">
+        Are you sure you want to delete the {itemToDelete?.type} <strong>"{itemToDelete?.name}"</strong>?
+      </p>
+      {#if itemToDelete?.type === 'section'}
+        <p class="delete-warning">⚠️ This will also delete all topics within this section.</p>
+      {/if}
+      <div class="modal-actions">
+        <button class="btn btn-secondary" on:click={cancelDelete}>Cancel</button>
+        <button class="btn btn-danger" on:click={confirmDelete}>Delete</button>
+      </div>
+    </div>
+  </div>
+
+
+/home/otterdev_ball/BaseDiskProject/promptMux/PromptMux/src/components/Sidebar.svelte:611:3
+Warn: A11y: visible, non-interactive elements with an on:click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as <button type="button"> or <a> might be more appropriate. See https://svelte.dev/docs/accessibility-warnings#a11y-click-events-have-key-events for more details. (svelte)
+{#if showDeleteModal}
+  <div class="modal-backdrop" on:click={cancelDelete}>
+    <div class="modal-content" on:click|stopPropagation>
+      <h3>Confirm Delete</h3>
+      <p class="delete-message">
+        Are you sure you want to delete the {itemToDelete?.type} <strong>"{itemToDelete?.name}"</strong>?
+      </p>
+      {#if itemToDelete?.type === 'section'}
+        <p class="delete-warning">⚠️ This will also delete all topics within this section.</p>
+      {/if}
+      <div class="modal-actions">
+        <button class="btn btn-secondary" on:click={cancelDelete}>Cancel</button>
+        <button class="btn btn-danger" on:click={confirmDelete}>Delete</button>
+      </div>
+    </div>
+  </div>
+{/if}
+
+
+/home/otterdev_ball/BaseDiskProject/promptMux/PromptMux/src/components/Sidebar.svelte:611:3
+Warn: A11y: <div> with click handler must have an ARIA role (svelte)
+{#if showDeleteModal}
+  <div class="modal-backdrop" on:click={cancelDelete}>
+    <div class="modal-content" on:click|stopPropagation>
+      <h3>Confirm Delete</h3>
+      <p class="delete-message">
+        Are you sure you want to delete the {itemToDelete?.type} <strong>"{itemToDelete?.name}"</strong>?
+      </p>
+      {#if itemToDelete?.type === 'section'}
+        <p class="delete-warning">⚠️ This will also delete all topics within this section.</p>
+      {/if}
+      <div class="modal-actions">
+        <button class="btn btn-secondary" on:click={cancelDelete}>Cancel</button>
+        <button class="btn btn-danger" on:click={confirmDelete}>Delete</button>
+      </div>
+    </div>
+  </div>
+{/if}
+
+
+/home/otterdev_ball/BaseDiskProject/promptMux/PromptMux/src/components/TopicEditor.svelte:321:8
+Warn: Unused CSS selector ".view-mode-container" (svelte)
+
+<style>
+  .topic-editor-container {
+
+
+/home/otterdev_ball/BaseDiskProject/promptMux/PromptMux/src/components/TopicEditor.svelte:321:8
+Warn: Unused CSS selector ".view-mode-content" (svelte)
+
+<style>
+  .topic-editor-container {
+
+
+/home/otterdev_ball/BaseDiskProject/promptMux/PromptMux/src/components/TopicEditor.svelte:321:8
+Warn: Unused CSS selector ".keyboard-hints" (svelte)
+
+<style>
+  .topic-editor-container {
+
+
+/home/otterdev_ball/BaseDiskProject/promptMux/PromptMux/src/components/TopicEditor.svelte:321:8
+Warn: Unused CSS selector ".focus-btn" (svelte)
+
+<style>
+  .topic-editor-container {
+
+
+/home/otterdev_ball/BaseDiskProject/promptMux/PromptMux/src/components/TopicEditor.svelte:321:8
+Warn: Unused CSS selector ".focus-btn:hover" (svelte)
+
+<style>
+  .topic-editor-container {
+
+
+/home/otterdev_ball/BaseDiskProject/promptMux/PromptMux/src/components/MergedOutput.svelte:169:7
+Warn: A11y: noninteractive element cannot have nonnegative tabIndex value (svelte)
+    {#if activeTab === 'raw'}
+      <pre 
+        id="merged-output"
+        class="output-content"
+        tabindex="0"
+        on:focus={handleFocus}
+        on:blur={handleBlur}
+      >{outputContent || 'Your merged prompt will appear here...'}</pre>
+    {:else if activeTab === 'refined'}
+
+
+/home/otterdev_ball/BaseDiskProject/promptMux/PromptMux/src/components/HelpModal.svelte:19:1
+Warn: A11y: visible, non-interactive elements with an on:click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as <button type="button"> or <a> might be more appropriate. See https://svelte.dev/docs/accessibility-warnings#a11y-click-events-have-key-events for more details. (svelte)
+
+<div class="modal-backdrop" on:click={handleBackdropClick}>
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2>⌨️ Keyboard Shortcuts</h2>
+      <button class="close-button" on:click={onClose}>✕</button>
+    </div>
+
+    <div class="modal-body">
+      <section>
+        <h3>Global Shortcuts (Ctrl+b then...)</h3>
+        <table class="shortcuts-table">
+          <tr>
+            <td><kbd>s</kbd></td>
+            <td>Create new section</td>
+          </tr>
+          <tr>
+            <td><kbd>?</kbd></td>
+            <td>Show/hide this help modal</td>
+          </tr>
+          <tr>
+            <td><kbd>e</kbd></td>
+            <td>Focus topic editor</td>
+          </tr>
+          <tr>
+            <td><kbd>o</kbd></td>
+            <td>Focus merged output pane</td>
+          </tr>
+          <tr>
+            <td><kbd>r</kbd></td>
+            <td>Refine merged output with LLM</td>
+          </tr>
+          <tr>
+            <td><kbd>p</kbd></td>
+            <td>Toggle project switcher dropdown</td>
+          </tr>
+          <tr>
+            <td><kbd>n</kbd></td>
+            <td>Create new project</td>
+          </tr>
+          <tr>
+            <td><kbd>[</kbd> / <kbd>]</kbd></td>
+            <td>Cycle to previous/next project</td>
+          </tr>
+        </table>
+      </section>
+
+      <section>
+        <h3>Quick Shortcuts</h3>
+        <table class="shortcuts-table">
+          <tr>
+            <td><kbd>Ctrl+Shift+S</kbd></td>
+            <td>Create new section</td>
+          </tr>
+          <tr>
+            <td><kbd>Ctrl+Shift+P</kbd></td>
+            <td>Cycle to next project</td>
+          </tr>
+          <tr>
+            <td><kbd>Ctrl+Alt+N</kbd></td>
+            <td>Create new project</td>
+          </tr>
+          <tr>
+            <td><kbd>F2</kbd></td>
+            <td>Rename current section or topic</td>
+          </tr>
+        </table>
+      </section>
+
+      <section>
+        <h3>Item Management</h3>
+        <table class="shortcuts-table">
+          <tr>
+            <td><kbd>F2</kbd></td>
+            <td>Rename current section or topic</td>
+          </tr>
+          <tr>
+            <td><kbd>n</kbd> (in sidebar)</td>
+            <td>Create new topic (in current section)</td>
+          </tr>
+        </table>
+      </section>
+
+      <section>
+        <h3>Sidebar Navigation</h3>
+        <table class="shortcuts-table">
+          <tr>
+            <td><kbd>j</kbd> / <kbd>k</kbd></td>
+            <td>Navigate down/up</td>
+          </tr>
+          <tr>
+            <td><kbd>h</kbd> / <kbd>l</kbd></td>
+            <td>Collapse/expand sections</td>
+          </tr>
+          <tr>
+            <td><kbd>Enter</kbd></td>
+            <td>Select item (topic → editor, section → toggle)</td>
+          </tr>
+          <tr>
+            <td><kbd>n</kbd></td>
+            <td>Create new topic (in current section)</td>
+          </tr>
+          <tr>
+            <td><kbd>d</kbd></td>
+            <td>Delete highlighted item</td>
+          </tr>
+          <tr>
+            <td><kbd>Ctrl+Shift+j</kbd> / <kbd>Ctrl+Shift+k</kbd></td>
+            <td>Move item down/up</td>
+          </tr>
+          <tr>
+            <td><kbd>Mouse drag</kbd></td>
+            <td>Drag and drop to reorder sections/topics</td>
+          </tr>
+        </table>
+      </section>
+
+      <section>
+        <h3>Topic Editor</h3>
+        <table class="shortcuts-table">
+          <tr>
+            <td><kbd>Ctrl+s</kbd></td>
+            <td>Save current topic</td>
+          </tr>
+          <tr>
+            <td><kbd>Ctrl+r</kbd></td>
+            <td>Refine current topic with LLM</td>
+          </tr>
+        </table>
+      </section>
+
+      <section>
+        <h3>Merged Output</h3>
+        <table class="shortcuts-table">
+          <tr>
+            <td><kbd>Ctrl+c</kbd> (in output pane)</td>
+            <td>Copy merged output to clipboard</td>
+          </tr>
+        </table>
+      </section>
+
+      <section class="tips">
+        <h3>💡 Tips</h3>
+        <ul>
+          <li>The merged output updates automatically as you type</li>
+          <li>Auto-save is enabled - changes save every 500ms</li>
+          <li>Press <kbd>Escape</kbd> to close this modal</li>
+          <li>Click outside this modal to close it</li>
+        </ul>
+      </section>
+    </div>
+  </div>
+</div>
+
+
+
+/home/otterdev_ball/BaseDiskProject/promptMux/PromptMux/src/components/HelpModal.svelte:19:1
+Warn: A11y: <div> with click handler must have an ARIA role (svelte)
+
+<div class="modal-backdrop" on:click={handleBackdropClick}>
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2>⌨️ Keyboard Shortcuts</h2>
+      <button class="close-button" on:click={onClose}>✕</button>
+    </div>
+
+    <div class="modal-body">
+      <section>
+        <h3>Global Shortcuts (Ctrl+b then...)</h3>
+        <table class="shortcuts-table">
+          <tr>
+            <td><kbd>s</kbd></td>
+            <td>Create new section</td>
+          </tr>
+          <tr>
+            <td><kbd>?</kbd></td>
+            <td>Show/hide this help modal</td>
+          </tr>
+          <tr>
+            <td><kbd>e</kbd></td>
+            <td>Focus topic editor</td>
+          </tr>
+          <tr>
+            <td><kbd>o</kbd></td>
+            <td>Focus merged output pane</td>
+          </tr>
+          <tr>
+            <td><kbd>r</kbd></td>
+            <td>Refine merged output with LLM</td>
+          </tr>
+          <tr>
+            <td><kbd>p</kbd></td>
+            <td>Toggle project switcher dropdown</td>
+          </tr>
+          <tr>
+            <td><kbd>n</kbd></td>
+            <td>Create new project</td>
+          </tr>
+          <tr>
+            <td><kbd>[</kbd> / <kbd>]</kbd></td>
+            <td>Cycle to previous/next project</td>
+          </tr>
+        </table>
+      </section>
+
+      <section>
+        <h3>Quick Shortcuts</h3>
+        <table class="shortcuts-table">
+          <tr>
+            <td><kbd>Ctrl+Shift+S</kbd></td>
+            <td>Create new section</td>
+          </tr>
+          <tr>
+            <td><kbd>Ctrl+Shift+P</kbd></td>
+            <td>Cycle to next project</td>
+          </tr>
+          <tr>
+            <td><kbd>Ctrl+Alt+N</kbd></td>
+            <td>Create new project</td>
+          </tr>
+          <tr>
+            <td><kbd>F2</kbd></td>
+            <td>Rename current section or topic</td>
+          </tr>
+        </table>
+      </section>
+
+      <section>
+        <h3>Item Management</h3>
+        <table class="shortcuts-table">
+          <tr>
+            <td><kbd>F2</kbd></td>
+            <td>Rename current section or topic</td>
+          </tr>
+          <tr>
+            <td><kbd>n</kbd> (in sidebar)</td>
+            <td>Create new topic (in current section)</td>
+          </tr>
+        </table>
+      </section>
+
+      <section>
+        <h3>Sidebar Navigation</h3>
+        <table class="shortcuts-table">
+          <tr>
+            <td><kbd>j</kbd> / <kbd>k</kbd></td>
+            <td>Navigate down/up</td>
+          </tr>
+          <tr>
+            <td><kbd>h</kbd> / <kbd>l</kbd></td>
+            <td>Collapse/expand sections</td>
+          </tr>
+          <tr>
+            <td><kbd>Enter</kbd></td>
+            <td>Select item (topic → editor, section → toggle)</td>
+          </tr>
+          <tr>
+            <td><kbd>n</kbd></td>
+            <td>Create new topic (in current section)</td>
+          </tr>
+          <tr>
+            <td><kbd>d</kbd></td>
+            <td>Delete highlighted item</td>
+          </tr>
+          <tr>
+            <td><kbd>Ctrl+Shift+j</kbd> / <kbd>Ctrl+Shift+k</kbd></td>
+            <td>Move item down/up</td>
+          </tr>
+          <tr>
+            <td><kbd>Mouse drag</kbd></td>
+            <td>Drag and drop to reorder sections/topics</td>
+          </tr>
+        </table>
+      </section>
+
+      <section>
+        <h3>Topic Editor</h3>
+        <table class="shortcuts-table">
+          <tr>
+            <td><kbd>Ctrl+s</kbd></td>
+            <td>Save current topic</td>
+          </tr>
+          <tr>
+            <td><kbd>Ctrl+r</kbd></td>
+            <td>Refine current topic with LLM</td>
+          </tr>
+        </table>
+      </section>
+
+      <section>
+        <h3>Merged Output</h3>
+        <table class="shortcuts-table">
+          <tr>
+            <td><kbd>Ctrl+c</kbd> (in output pane)</td>
+            <td>Copy merged output to clipboard</td>
+          </tr>
+        </table>
+      </section>
+
+      <section class="tips">
+        <h3>💡 Tips</h3>
+        <ul>
+          <li>The merged output updates automatically as you type</li>
+          <li>Auto-save is enabled - changes save every 500ms</li>
+          <li>Press <kbd>Escape</kbd> to close this modal</li>
+          <li>Click outside this modal to close it</li>
+        </ul>
+      </section>
+    </div>
+  </div>
+</div>
+
+
+
+/home/otterdev_ball/BaseDiskProject/promptMux/PromptMux/src/components/RefineModal.svelte:93:1
+Warn: A11y: visible, non-interactive elements with an on:click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as <button type="button"> or <a> might be more appropriate. See https://svelte.dev/docs/accessibility-warnings#a11y-click-events-have-key-events for more details. (svelte)
+
+<div class="modal-backdrop" on:click={handleBackdropClick}>
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2>
+        {target === 'topic' ? '✨ Refine Topic' : '✨ Refine Merged Output'}
+      </h2>
+      <button 
+        class="close-button" 
+        on:click={handleCancel}
+        disabled={loading}
+      >✕</button>
+    </div>
+
+    <div class="modal-body">
+      {#if loading}
+        <div class="loading-state">
+          <div class="spinner"></div>
+          <p>Refining your prompt with AI...</p>
+          <span class="subtext">This may take a few moments</span>
+        </div>
+      {:else if refinedContent}
+        <div class="result-state">
+          <div class="content-comparison">
+            <div class="content-panel">
+              <h3>Original</h3>
+              <pre class="content-preview">{originalContent}</pre>
+            </div>
+
+            <div class="content-panel">
+              <h3>Refined</h3>
+              <pre class="content-preview refined">{refinedContent}</pre>
+            </div>
+          </div>
+
+          {#if error}
+            <div class="error-message">{error}</div>
+          {/if}
+
+          <div class="modal-actions">
+            <button 
+              class="btn btn-secondary" 
+              on:click={handleCancel}
+            >
+              Cancel
+            </button>
+            <button 
+              class="btn btn-primary" 
+              on:click={handleAccept}
+              disabled={!!error}
+            >
+              Accept Refined Version
+            </button>
+          </div>
+        </div>
+      {:else}
+        <div class="initial-state">
+          <div class="info-box">
+            <p>
+              This will use the LLM API configured in your settings to refine and improve your prompt.
+            </p>
+            <div class="content-preview-box">
+              <h4>Content to refine:</h4>
+              <pre>{originalContent || '(empty)'}</pre>
+            </div>
+          </div>
+
+          {#if error}
+            <div class="error-message">{error}</div>
+          {/if}
+
+          <div class="modal-actions">
+            <button 
+              class="btn btn-secondary" 
+              on:click={handleCancel}
+              disabled={loading}
+            >
+              Cancel
+            </button>
+            <button 
+              class="btn btn-primary" 
+              on:click={handleRefine}
+              disabled={loading}
+            >
+              {loading ? 'Refining...' : 'Refine with AI'}
+            </button>
+          </div>
+        </div>
+      {/if}
+    </div>
+  </div>
+</div>
+
+
+
+/home/otterdev_ball/BaseDiskProject/promptMux/PromptMux/src/components/RefineModal.svelte:93:1
+Warn: A11y: <div> with click handler must have an ARIA role (svelte)
+
+<div class="modal-backdrop" on:click={handleBackdropClick}>
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2>
+        {target === 'topic' ? '✨ Refine Topic' : '✨ Refine Merged Output'}
+      </h2>
+      <button 
+        class="close-button" 
+        on:click={handleCancel}
+        disabled={loading}
+      >✕</button>
+    </div>
+
+    <div class="modal-body">
+      {#if loading}
+        <div class="loading-state">
+          <div class="spinner"></div>
+          <p>Refining your prompt with AI...</p>
+          <span class="subtext">This may take a few moments</span>
+        </div>
+      {:else if refinedContent}
+        <div class="result-state">
+          <div class="content-comparison">
+            <div class="content-panel">
+              <h3>Original</h3>
+              <pre class="content-preview">{originalContent}</pre>
+            </div>
+
+            <div class="content-panel">
+              <h3>Refined</h3>
+              <pre class="content-preview refined">{refinedContent}</pre>
+            </div>
+          </div>
+
+          {#if error}
+            <div class="error-message">{error}</div>
+          {/if}
+
+          <div class="modal-actions">
+            <button 
+              class="btn btn-secondary" 
+              on:click={handleCancel}
+            >
+              Cancel
+            </button>
+            <button 
+              class="btn btn-primary" 
+              on:click={handleAccept}
+              disabled={!!error}
+            >
+              Accept Refined Version
+            </button>
+          </div>
+        </div>
+      {:else}
+        <div class="initial-state">
+          <div class="info-box">
+            <p>
+              This will use the LLM API configured in your settings to refine and improve your prompt.
+            </p>
+            <div class="content-preview-box">
+              <h4>Content to refine:</h4>
+              <pre>{originalContent || '(empty)'}</pre>
+            </div>
+          </div>
+
+          {#if error}
+            <div class="error-message">{error}</div>
+          {/if}
+
+          <div class="modal-actions">
+            <button 
+              class="btn btn-secondary" 
+              on:click={handleCancel}
+              disabled={loading}
+            >
+              Cancel
+            </button>
+            <button 
+              class="btn btn-primary" 
+              on:click={handleRefine}
+              disabled={loading}
+            >
+              {loading ? 'Refining...' : 'Refine with AI'}
+            </button>
+          </div>
+        </div>
+      {/if}
+    </div>
+  </div>
+</div>
+
+
+
+/home/otterdev_ball/BaseDiskProject/promptMux/PromptMux/src/App.svelte:242:8
+Warn: Unused CSS selector "#sidebar" (svelte)
+
+<style>
+  .app-container {
+
+
+/home/otterdev_ball/BaseDiskProject/promptMux/PromptMux/src/App.svelte:242:8
+Warn: Unused CSS selector "#topic-editor" (svelte)
+
+<style>
+  .app-container {
+
+
+/home/otterdev_ball/BaseDiskProject/promptMux/PromptMux/src/App.svelte:242:8
+Warn: Unused CSS selector "#merged-output" (svelte)
+
+<style>
+  .app-container {
+
+
+====================================
+svelte-check found 0 errors and 46 warnings in 8 files

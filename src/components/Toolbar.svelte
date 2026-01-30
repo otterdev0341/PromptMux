@@ -12,9 +12,9 @@
   let showNewSectionDialog = false;
   let showSettingsDialog = false;
   let newSectionName = '';
-  let projectSwitcherComponent: ProjectSwitcher;
 
-  export { projectSwitcherComponent };
+
+  export let projectSwitcherComponent: ProjectSwitcher | undefined = undefined;
 
   onMount(async () => {
     try {
