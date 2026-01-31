@@ -635,6 +635,178 @@ erDiagram
 }
 
 #[tauri::command]
+pub fn save_project_uml_diagram(
+    state: State<AppState>,
+    uml_diagram: String,
+) -> Result<(), String> {
+    let mut workspace = state.workspace.lock().unwrap();
+    let project = workspace.get_active_project_mut()
+        .ok_or("No active project found".to_string())?;
+
+    project.uml_diagram = Some(uml_diagram);
+    project.updated_at = chrono::Utc::now().to_rfc3339();
+
+    if let Err(e) = save_workspace(&workspace, &state.data_dir) {
+        return Err(format!("Failed to save workspace: {}", e));
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn refine_uml_diagram_with_llm_stream(app: tauri::AppHandle, content: String) -> Result<(), String> {
+    let settings = load_settings()?;
+    let client = reqwest::Client::new();
+    
+    // Determine protocol
+    let is_anthropic = settings.protocol.as_deref().unwrap_or("openai") == "anthropic" 
+        || (settings.protocol.is_none() && settings.provider == "anthropic");
+
+    let system_prompt = "You are an expert software architect. Your task is to analyze the provided software project description and generate a Mermaid Class Diagram representing the architecture using the Repository Pattern.
+    
+Include the following layers where appropriate:
+- Interface
+- Repository
+- Service
+- Resource/Controller
+- DTO
+
+Output ONLY the mermaid code block. Do not include markdown code fences (```mermaid). Do not include any explanation. Just the code.
+Start with `classDiagram`.
+
+Example output:
+classDiagram
+    class UserRepository {
+        <<interface>>
+        +findById(id: Long) User
+        +save(user: User) User
+    }
+    class UserRepositoryImpl {
+        +findById(id: Long) User
+        +save(user: User) User
+    }
+    class UserService {
+        -userRepository: UserRepository
+        +createUser(userDto: UserDTO) UserDTO
+    }
+    UserRepository <|.. UserRepositoryImpl
+    UserService --> UserRepository";
+
+    let request_body = if !is_anthropic {
+        // OpenAI Format
+        serde_json::json!({
+            "model": settings.model.unwrap_or("gpt-4".to_string()),
+            "stream": true,
+            "messages": [
+                {
+                    "role": "system",
+                    "content": system_prompt
+                },
+                {
+                    "role": "user",
+                    "content": format!("Generate a Mermaid Class Diagram (Repository Pattern) for the following project description:\n\n{}", content)
+                }
+            ]
+        })
+    } else {
+        // Anthropic Format
+        serde_json::json!({
+            "model": settings.model.unwrap_or("claude-3-sonnet-20240229".to_string()),
+            "max_tokens": 4096,
+            "stream": true,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": format!("{}\n\nGenerate a Mermaid Class Diagram (Repository Pattern) for the following project description:\n\n{}", system_prompt, content)
+                }
+            ]
+        })
+    };
+    
+    let url = if !is_anthropic {
+        format!("{}/chat/completions", settings.base_url.trim_end_matches('/'))
+    } else {
+        format!("{}/messages", settings.base_url.trim_end_matches('/'))
+    };
+    
+    // Construct request
+    let mut request_builder = client.post(&url)
+        .header("Content-Type", "application/json")
+        .json(&request_body);
+        
+    if is_anthropic {
+         request_builder = request_builder
+            .header("x-api-key", &settings.api_key)
+            .header("anthropic-version", "2023-06-01");
+    } else {
+         request_builder = request_builder.header("Authorization", format!("Bearer {}", settings.api_key));
+    }
+
+    // Send request
+    let response = request_builder
+        .send()
+        .await
+        .map_err(|e| format!("Failed to send request: {}", e))?;
+    
+    if !response.status().is_success() {
+        let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+        return Err(format!("LLM API error: {}", error_text));
+    }
+
+    // Spawn a task to handle streaming so we don't block
+    tauri::async_runtime::spawn(async move {
+        let mut stream = response.bytes_stream();
+        while let Some(item) = stream.next().await {
+            match item {
+                Ok(bytes) => {
+                    let chunk_str = String::from_utf8_lossy(&bytes);
+                    for line in chunk_str.lines() {
+                        let line = line.trim();
+                        if line.is_empty() { continue; }
+                        
+                        // Parse SSE
+                        if line.starts_with("data: ") {
+                            let data = &line[6..];
+                            if data == "[DONE]" {
+                                let _ = app.emit("uml:done", ());
+                                return;
+                            }
+                            
+                            if let Ok(json) = serde_json::from_str::<serde_json::Value>(data) {
+                                if !is_anthropic {
+                                    // OpenAI format
+                                    if let Some(content) = json["choices"][0]["delta"]["content"].as_str() {
+                                        let _ = app.emit("uml:chunk", content);
+                                    }
+                                } else {
+                                    // Anthropic format
+                                    if json["type"] == "content_block_delta" {
+                                        if let Some(text) = json["delta"]["text"].as_str() {
+                                            let _ = app.emit("uml:chunk", text);
+                                        }
+                                    }
+                                    if json["type"] == "message_stop" {
+                                        let _ = app.emit("uml:done", ());
+                                        return;
+                                    }
+                                }
+                            }
+                        } 
+                    }
+                }
+                Err(e) => {
+                    let _ = app.emit("uml:error", format!("Stream error: {}", e));
+                    return;
+                }
+            }
+        }
+        let _ = app.emit("uml:done", ());
+    });
+
+    Ok(())
+}
+
+#[tauri::command]
 pub async fn refine_with_llm(_content: String) -> Result<String, String> {
     // Legacy implementation kept for fallback if needed, or redirect to stream?
     // For now, let's keep it simple and just return error saying to use stream,

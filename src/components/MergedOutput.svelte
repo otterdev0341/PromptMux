@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { mergedOutput, projectStore, saveProjectRefinement, saveProjectErDiagram } from '../stores/projectStore';
+  import { mergedOutput, projectStore, saveProjectRefinement, saveProjectErDiagram, saveProjectUmlDiagram } from '../stores/projectStore';
   import type { Refinement } from '../stores/projectStore';
   import { invoke } from '@tauri-apps/api/core';
   import { listen } from '@tauri-apps/api/event';
@@ -8,9 +8,10 @@
 
   let outputContent = '';
   let refinedContent = '';
-  let activeTab: 'raw' | 'refine' | 'er' = 'raw';
+  let activeTab: 'raw' | 'refine' | 'er' | 'uml' = 'raw';
   let refineTab: 'generate' | 'history' = 'generate';
   let erTab: 'editor' | 'render' = 'render';
+  let umlTab: 'editor' | 'render' = 'render';
   let isRefining = false;
   let refineError = '';
   let focused = false;
@@ -21,13 +22,26 @@
   let erError = '';
   let mermaidContainer: HTMLElement;
   
-  // Zoom/Pan State
+  // UML State
+  let umlCode = '';
+  let isGeneratingUml = false;
+  let umlError = '';
+  let umlContainer: HTMLElement;
+  
+  // Zoom/Pan State (Shared or Duplicated? Duplicating for simplicity/independence for now)
   let zoomScale = 1;
   let panX = 0;
   let panY = 0;
   let isPanning = false;
   let startX = 0;
   let startY = 0;
+
+  let umlZoomScale = 1;
+  let umlPanX = 0;
+  let umlPanY = 0;
+  let isPanningUml = false;
+  let umlStartX = 0;
+  let umlStartY = 0;
   
   // Track listeners to clean up
   let unlistenFunctions: (() => void)[] = [];
@@ -47,14 +61,24 @@
     });
     
     // Load existing diagram if available
-    if ($projectStore && $projectStore.er_diagram) {
-      erCode = $projectStore.er_diagram;
+    if ($projectStore) {
+      if ($projectStore.er_diagram) {
+        erCode = $projectStore.er_diagram;
+      }
+      if ($projectStore.uml_diagram) {
+        umlCode = $projectStore.uml_diagram;
+      }
     }
   });
 
   // Watch for project updates
-  $: if ($projectStore && $projectStore.er_diagram && !erCode) {
-    erCode = $projectStore.er_diagram;
+  $: if ($projectStore) {
+    if ($projectStore.er_diagram && !erCode) {
+      erCode = $projectStore.er_diagram;
+    }
+    if ($projectStore.uml_diagram && !umlCode) {
+      umlCode = $projectStore.uml_diagram;
+    }
   }
 
   function cleanupListeners() {
@@ -70,10 +94,12 @@
     focused = false;
   }
   
-  function switchTab(tab: 'raw' | 'refine' | 'er') {
+  function switchTab(tab: 'raw' | 'refine' | 'er' | 'uml') {
     activeTab = tab;
     if (tab === 'er' && erTab === 'render') {
       setTimeout(renderDiagram, 100);
+    } else if (tab === 'uml' && umlTab === 'render') {
+      setTimeout(renderUmlDiagram, 100);
     }
   }
 
@@ -85,6 +111,13 @@
     erTab = tab;
     if (tab === 'render') {
       setTimeout(renderDiagram, 100);
+    }
+  }
+
+  function switchUmlTab(tab: 'editor' | 'render') {
+    umlTab = tab;
+    if (tab === 'render') {
+      setTimeout(renderUmlDiagram, 100);
     }
   }
   
@@ -204,6 +237,122 @@
     }
   }
 
+  // UML Handlers
+
+  function handleUmlWheel(e: WheelEvent) {
+    if (umlTab !== 'render') return;
+    e.preventDefault();
+    
+    const delta = e.deltaY > 0 ? 0.9 : 1.1;
+    const newScale = Math.max(0.1, Math.min(5, umlZoomScale * delta));
+    umlZoomScale = newScale;
+  }
+  
+  function handleUmlMouseDown(e: MouseEvent) {
+    if (umlTab !== 'render') return;
+    isPanningUml = true;
+    umlStartX = e.clientX - umlPanX;
+    umlStartY = e.clientY - umlPanY;
+  }
+  
+  function handleUmlMouseMove(e: MouseEvent) {
+    if (!isPanningUml) return;
+    e.preventDefault();
+    umlPanX = e.clientX - umlStartX;
+    umlPanY = e.clientY - umlStartY;
+  }
+  
+  function handleUmlMouseUp() {
+    isPanningUml = false;
+  }
+  
+  function handleUmlResetView() {
+    umlZoomScale = 1;
+    umlPanX = 0;
+    umlPanY = 0;
+  }
+
+  function handleUmlZoomIn() {
+    umlZoomScale = Math.min(5, umlZoomScale * 1.2);
+  }
+
+  function handleUmlZoomOut() {
+    umlZoomScale = Math.max(0.1, umlZoomScale * 0.8);
+  }
+
+  async function renderUmlDiagram() {
+    if (!umlCode || !umlContainer) return;
+    
+    // Reset view when re-rendering
+    handleUmlResetView();
+    
+    try {
+      umlContainer.innerHTML = '';
+      const { svg } = await mermaid.render('mermaid-uml-svg-' + Date.now(), umlCode);
+      umlContainer.innerHTML = svg;
+    } catch (error) {
+      console.error('Mermaid render error:', error);
+      umlContainer.innerHTML = `<div class="error-msg">Failed to render diagram: ${error}</div>`;
+    }
+  }
+
+  async function handleGenerateUml() {
+    if (!outputContent) return;
+    
+    // Reset state
+    isGeneratingUml = true;
+    umlError = '';
+    cleanupListeners();
+    
+    // Switch to editor view to see it streaming in
+    umlTab = 'editor';
+    umlCode = ''; 
+    
+    try {
+      const unlistenChunk = await listen<string>('uml:chunk', (event) => {
+        umlCode += event.payload;
+      });
+      
+      const unlistenDone = await listen('uml:done', () => {
+        isGeneratingUml = false;
+        cleanupListeners();
+        saveProjectUmlDiagram(umlCode);
+      });
+      
+      const unlistenError = await listen<string>('uml:error', (event) => {
+        console.error('UML stream error:', event.payload);
+        umlError = event.payload;
+        isGeneratingUml = false;
+        cleanupListeners();
+      });
+      
+      unlistenFunctions.push(unlistenChunk, unlistenDone, unlistenError);
+      
+      await invoke('refine_uml_diagram_with_llm_stream', { content: refinedContent || outputContent });
+    } catch (err) {
+      console.error('UML generation failed:', err);
+      umlError = String(err);
+      isGeneratingUml = false;
+      cleanupListeners();
+    }
+  }
+
+  async function handleSaveUml() {
+    if (!umlCode) return;
+    try {
+      await saveProjectUmlDiagram(umlCode);
+      
+      // Feedback
+      const indicator = document.createElement('div');
+      indicator.className = 'copy-indicator';
+      indicator.textContent = 'UML Diagram Saved!';
+      document.body.appendChild(indicator);
+      setTimeout(() => indicator.remove(), 1000);
+    } catch (err) {
+      console.error('Failed to save UML diagram:', err);
+    }
+  }
+
   async function handleRefine() {
     if (!outputContent) return;
     
@@ -311,6 +460,12 @@
       >
         ER Diagram
       </button>
+      <button 
+        class="tab-btn {activeTab === 'uml' ? 'active' : ''}" 
+        on:click={() => switchTab('uml')}
+      >
+        UML Diagram
+      </button>
     </div>
     
     <div class="header-actions">
@@ -325,6 +480,10 @@
         </button>
       {:else if erCode && activeTab === 'er'}
         <button class="copy-button" on:click={() => copyToClipboard(erCode)}>
+          📋 Copy Code
+        </button>
+      {:else if umlCode && activeTab === 'uml'}
+        <button class="copy-button" on:click={() => copyToClipboard(umlCode)}>
           📋 Copy Code
         </button>
       {/if}
@@ -496,6 +655,84 @@
                   <button class="zoom-btn" on:click={handleZoomIn} title="Zoom In">+</button>
                   <button class="zoom-btn" on:click={handleZoomOut} title="Zoom Out">-</button>
                   <button class="zoom-btn" on:click={handleResetView} title="Reset View">Reset</button>
+                </div>
+              </div>
+           {/if}
+        </div>
+      </div>
+    {:else if activeTab === 'uml'}
+      <div class="refine-wrapper">
+        <div class="refine-tabs">
+          <button 
+            class="refine-tab-btn {umlTab === 'editor' ? 'active' : ''}" 
+            on:click={() => switchUmlTab('editor')}
+          >
+            Editor
+          </button>
+          <button 
+            class="refine-tab-btn {umlTab === 'render' ? 'active' : ''}" 
+            on:click={() => switchUmlTab('render')}
+          >
+            Render
+          </button>
+        </div>
+
+        <div class="er-container">
+           {#if umlTab === 'editor'}
+              <div class="er-editor-container">
+                 <textarea 
+                   class="er-editor" 
+                   bind:value={umlCode}
+                   placeholder="Mermaid Class diagram code will appear here..."
+                 ></textarea>
+                 
+                 <div class="refine-actions">
+                   {#if isGeneratingUml}
+                     <div class="generating-indicator">
+                        <div class="spinner-small"></div> Generating...
+                     </div>
+                   {:else}
+                    <button class="action-btn secondary" on:click={handleGenerateUml}>
+                      {umlCode ? 'Re-generate from Refined' : 'Generate from Refined'}
+                    </button>
+                    <button class="action-btn primary" on:click={handleSaveUml} disabled={!umlCode}>
+                      Save
+                    </button>
+                   {/if}
+                 </div>
+                 {#if umlError}
+                    <div class="error-msg">{umlError}</div>
+                 {/if}
+              </div>
+           {:else}
+              <div 
+                class="er-render-container" 
+                role="region"
+                aria-label="UML Diagram Render View"
+                on:wheel={handleUmlWheel}
+                on:mousedown={handleUmlMouseDown}
+                on:mousemove={handleUmlMouseMove}
+                on:mouseup={handleUmlMouseUp}
+                on:mouseleave={handleUmlMouseUp}
+                style="cursor: {isPanningUml ? 'grabbing' : 'grab'};"
+              >
+                <div 
+                  class="zoom-container"
+                  style="transform: translate({umlPanX}px, {umlPanY}px) scale({umlZoomScale});"
+                  bind:this={umlContainer}
+                >
+                  <!-- Mermaid diagram rendered here -->
+                  {#if !umlCode}
+                    <div class="empty-state-small">
+                       <p>Generate a diagram first.</p>
+                    </div>
+                  {/if}
+                </div>
+                
+                <div class="zoom-controls">
+                  <button class="zoom-btn" on:click={handleUmlZoomIn} title="Zoom In">+</button>
+                  <button class="zoom-btn" on:click={handleUmlZoomOut} title="Zoom Out">-</button>
+                  <button class="zoom-btn" on:click={handleUmlResetView} title="Reset View">Reset</button>
                 </div>
               </div>
            {/if}

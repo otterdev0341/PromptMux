@@ -90,6 +90,7 @@ pub struct Project {
     #[serde(default)]
     pub history: Vec<Refinement>,
     pub er_diagram: Option<String>,
+    pub uml_diagram: Option<String>,
 }
 
 impl Project {
@@ -103,6 +104,7 @@ impl Project {
             updated_at: now,
             history: Vec::new(),
             er_diagram: None,
+            uml_diagram: None,
         }
     }
 
