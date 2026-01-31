@@ -7,6 +7,7 @@
   import mermaid from 'mermaid';
   import { UndoHistory } from '../utils/UndoHistory';
   import { debounce } from '../utils/debounce';
+  import DiagramWorkspace from './DiagramWorkspace.svelte';
 
   let outputContent = '';
   let refinedContent = '';
@@ -80,15 +81,22 @@
   let unlistenFunctions: (() => void)[] = [];
 
   // Undo History
-  const erHistory = new UndoHistory<string>();
-  const umlHistory = new UndoHistory<string>();
-  const flowchartHistory = new UndoHistory<string>();
-  const journeyHistory = new UndoHistory<string>();
+  // Refinement History (Chat)
+  $: erChatHistory = $projectStore?.history?.filter(h => h.kind === 'er') || [];
+  $: umlChatHistory = $projectStore?.history?.filter(h => h.kind === 'uml') || [];
+  $: flowchartChatHistory = $projectStore?.history?.filter(h => h.kind === 'flowchart') || [];
+  $: journeyChatHistory = $projectStore?.history?.filter(h => h.kind === 'journey') || [];
 
-  const debouncedErPush = debounce((code: string) => erHistory.push(code), 1000);
-  const debouncedUmlPush = debounce((code: string) => umlHistory.push(code), 1000);
-  const debouncedFlowchartPush = debounce((code: string) => flowchartHistory.push(code), 1000);
-  const debouncedJourneyPush = debounce((code: string) => journeyHistory.push(code), 1000);
+  // Undo History
+  const erUndoHistory = new UndoHistory<string>();
+  const umlUndoHistory = new UndoHistory<string>();
+  const flowchartUndoHistory = new UndoHistory<string>();
+  const journeyUndoHistory = new UndoHistory<string>();
+
+  const debouncedErPush = debounce((code: string) => erUndoHistory.push(code), 1000);
+  const debouncedUmlPush = debounce((code: string) => umlUndoHistory.push(code), 1000);
+  const debouncedFlowchartPush = debounce((code: string) => flowchartUndoHistory.push(code), 1000);
+  const debouncedJourneyPush = debounce((code: string) => journeyUndoHistory.push(code), 1000);
 
   $: outputContent = $mergedOutput;
 
@@ -96,34 +104,9 @@
     cleanupListeners();
   });
 
-  // Initialize Mermaid
-  onMount(() => {
-    mermaid.initialize({ 
-      startOnLoad: false,
-      theme: 'dark',
-      securityLevel: 'loose',
-    });
-    
-    // Load existing diagram if available
-    if ($projectStore) {
-      if ($projectStore.er_diagram) {
-        erCode = $projectStore.er_diagram;
-      }
-      if ($projectStore.uml_diagram) {
-        umlCode = $projectStore.uml_diagram;
-      }
-      if ($projectStore.flowchart) {
-        flowchartCode = $projectStore.flowchart;
-      }
-      if ($projectStore.user_journey) {
-        journeyCode = $projectStore.user_journey;
-      }
-      if ($projectStore.user_stories) {
-        userStoriesContent = $projectStore.user_stories;
-      }
-    }
-  });
-
+  // Initialize - mermaid init moved to DiagramWorkspace, check if needed here for other things?
+  // We still use mermaid for Showcase or something? Maybe. But mostly DiagramWorkspace handles it.
+  
   let lastProjectId: string | null = null;
 
   // Watch for project updates - only sync when switching projects
@@ -135,19 +118,19 @@
       flowchartCode = $projectStore.flowchart || '';
       
       // Initialize Undo History
-      erHistory.clear();
-      erHistory.push(erCode);
+      erUndoHistory.clear();
+      erUndoHistory.push(erCode);
       
-      umlHistory.clear();
-      umlHistory.push(umlCode);
+      umlUndoHistory.clear();
+      umlUndoHistory.push(umlCode);
       
-      flowchartHistory.clear();
-      flowchartHistory.push(flowchartCode);
+      flowchartUndoHistory.clear();
+      flowchartUndoHistory.push(flowchartCode);
 
       journeyCode = $projectStore.user_journey || '';
       userStoriesContent = $projectStore.user_stories || '';
-      journeyHistory.clear();
-      journeyHistory.push(journeyCode);
+      journeyUndoHistory.clear();
+      journeyUndoHistory.push(journeyCode);
     }
   }
 
@@ -164,422 +147,24 @@
     focused = false;
   }
   
-  function switchTab(tab: 'raw' | 'refine' | 'er' | 'uml' | 'flowchart') {
+  function switchTab(tab: 'raw' | 'refine' | 'er' | 'uml' | 'flowchart' | 'journey') {
     activeTab = tab;
-    if (tab === 'er' && erTab === 'render') {
-      tick().then(() => renderDiagram('er'));
-    } else if (tab === 'uml' && umlTab === 'render') {
-      tick().then(() => renderDiagram('uml'));
-    } else if (tab === 'flowchart' && flowchartTab === 'render') {
-      tick().then(() => renderDiagram('flowchart'));
-    } else if (tab === 'journey' && journeyTab === 'render') {
-      tick().then(() => renderDiagram('journey'));
-    }
   }
 
   function switchRefineTab(tab: 'generate' | 'history') {
     refineTab = tab;
   }
 
-  function switchErTab(tab: 'editor' | 'render') {
-    erTab = tab;
-    if (tab === 'render') {
-      tick().then(() => renderDiagram('er'));
-    }
-  }
-
-  function switchUmlTab(tab: 'editor' | 'render') {
-    umlTab = tab;
-    if (tab === 'render') {
-      tick().then(() => renderDiagram('uml'));
-    }
-  }
-
-  function switchFlowchartTab(tab: 'editor' | 'render') {
-    flowchartTab = tab;
-    if (tab === 'render') {
-      tick().then(() => renderDiagram('flowchart'));
-    }
-  }
-
-  function switchJourneyTab(tab: 'editor' | 'render' | 'showcase') {
-    journeyTab = tab;
-    if (tab === 'render') {
-      tick().then(() => renderDiagram('journey'));
-    }
-  }
+  // Dead Code: switchErTab, switchUmlTab, switchFlowchartTab, switchJourneyTab
+  // These are handled within DiagramWorkspace or not needed as we don't have sub-tabs in MergedOutput anymore (except Journey Showcase)
   
-  // Zoom Handler
-  function handleWheel(e: WheelEvent, type: 'er' | 'uml' | 'flowchart' | 'journey') {
-    if ((type === 'er' && erTab !== 'render') || 
-        (type === 'uml' && umlTab !== 'render') ||
-        (type === 'flowchart' && flowchartTab !== 'render') ||
-        (type === 'journey' && journeyTab !== 'render')) return;
-    e.preventDefault();
-    
-    const delta = e.deltaY > 0 ? 0.9 : 1.1;
-    if (type === 'er') {
-      zoomScale = Math.max(0.1, Math.min(5, zoomScale * delta));
-    } else if (type === 'uml') {
-      umlZoomScale = Math.max(0.1, Math.min(5, umlZoomScale * delta));
-    } else if (type === 'flowchart') {
-      flowchartZoomScale = Math.max(0.1, Math.min(5, flowchartZoomScale * delta));
-    } else if (type === 'journey') {
-      journeyZoomScale = Math.max(0.1, Math.min(5, journeyZoomScale * delta));
-    }
-  }
-  
-  // Pan Handlers
-  function handleMouseDown(e: MouseEvent, type: 'er' | 'uml' | 'flowchart' | 'journey') {
-    if ((type === 'er' && erTab !== 'render') || 
-        (type === 'uml' && umlTab !== 'render') ||
-        (type === 'flowchart' && flowchartTab !== 'render') ||
-        (type === 'journey' && journeyTab !== 'render')) return;
-    
-    if (type === 'er') {
-      isPanning = true;
-      startX = e.clientX - panX;
-      startY = e.clientY - panY;
-    } else if (type === 'uml') {
-      isPanningUml = true;
-      umlStartX = e.clientX - umlPanX;
-      umlStartY = e.clientY - umlPanY;
-    } else if (type === 'flowchart') {
-      isPanningFlowchart = true;
-      flowchartStartX = e.clientX - flowchartPanX;
-      flowchartStartY = e.clientY - flowchartPanY;
-    } else if (type === 'journey') {
-      isPanningJourney = true;
-      journeyStartX = e.clientX - journeyPanX;
-      journeyStartY = e.clientY - journeyPanY;
-    }
-  }
-  
-  function handleMouseMove(e: MouseEvent, type: 'er' | 'uml' | 'flowchart' | 'journey') {
-    e.preventDefault();
-    if (type === 'er') {
-       if (!isPanning) return;
-       panX = e.clientX - startX;
-       panY = e.clientY - startY;
-    } else if (type === 'uml') {
-       if (!isPanningUml) return;
-       umlPanX = e.clientX - umlStartX;
-       umlPanY = e.clientY - umlStartY;
-    } else if (type === 'flowchart') {
-       if (!isPanningFlowchart) return;
-       flowchartPanX = e.clientX - flowchartStartX;
-       flowchartPanY = e.clientY - flowchartStartY;
-    } else if (type === 'journey') {
-       if (!isPanningJourney) return;
-       journeyPanX = e.clientX - journeyStartX;
-       journeyPanY = e.clientY - journeyStartY;
-    }
-  }
-  
-  function handleMouseUp(type: 'er' | 'uml' | 'flowchart' | 'journey') {
-    if (type === 'er') {
-      isPanning = false;
-    } else if (type === 'uml') {
-      isPanningUml = false;
-    } else if (type === 'flowchart') {
-      isPanningFlowchart = false;
-    } else if (type === 'journey') {
-      isPanningJourney = false;
-    }
-  }
-  
-  function handleResetView(type: 'er' | 'uml' | 'flowchart' | 'journey') {
-    if (type === 'er') {
-      zoomScale = 1;
-      panX = 0;
-      panY = 0;
-    } else if (type === 'uml') {
-      umlZoomScale = 1;
-      umlPanX = 0;
-      umlPanY = 0;
-    } else if (type === 'flowchart') {
-      flowchartZoomScale = 1;
-      flowchartPanX = 0;
-      flowchartPanY = 0;
-    } else if (type === 'journey') {
-      journeyZoomScale = 1;
-      journeyPanX = 0;
-      journeyPanY = 0;
-    }
-  }
 
-  function handleZoomIn(type: 'er' | 'uml' | 'flowchart' | 'journey') {
-    if (type === 'er') {
-      zoomScale = Math.min(5, zoomScale * 1.2);
-    } else if (type === 'uml') {
-      umlZoomScale = Math.min(5, umlZoomScale * 1.2);
-    } else if (type === 'flowchart') {
-      flowchartZoomScale = Math.min(5, flowchartZoomScale * 1.2);
-    } else if (type === 'journey') {
-      journeyZoomScale = Math.min(5, journeyZoomScale * 1.2);
-    }
-  }
 
-  function handleZoomOut(type: 'er' | 'uml' | 'flowchart' | 'journey') {
-     if (type === 'er') {
-      zoomScale = Math.max(0.1, zoomScale * 0.8);
-    } else if (type === 'uml') {
-      umlZoomScale = Math.max(0.1, umlZoomScale * 0.8);
-    } else if (type === 'flowchart') {
-      flowchartZoomScale = Math.max(0.1, flowchartZoomScale * 0.8);
-    } else if (type === 'journey') {
-      journeyZoomScale = Math.max(0.1, journeyZoomScale * 0.8);
-    }
-  }
-
-  function cleanMermaidCode(code: string): string {
-    // 1. Remove markdown code blocks globally
-    let clean = code
-      .replace(/```mermaid/gi, '')
-      .replace(/```/g, '')
-      .trim();
-
-    // 2. Fix concatenation issues where newline is missing
-    // Case A: ";graph" or "];graph" -> "];\n\ngraph"
-    clean = clean.replace(/([;\]\}\)])\s*(graph|flowchart|journey)(\s|;)/gi, '$1\n\n$2$3');
-    
-    // Case B: "wordgraph TD" (hallucination/typo) -> "word\n\ngraph TD"
-    // Matches alphanumeric char, then graph/flowchart, then direction (TD, LR, etc.)
-    clean = clean.replace(/([a-z0-9])(graph|flowchart|journey)\s+(TD|TB|BT|RL|LR)/gi, '$1\n\n$2 $3');
-    
-    // 3. Keep only the first valid diagram block
-    // Split by newline followed by graph/flowchart keyword
-    const parts = clean.split(/\n\s*(?=graph\s|flowchart\s|journey\s)/i);
-    
-    if (parts.length > 0) {
-      for (const part of parts) {
-        const trimmed = part.trim();
-        if (/^(graph|flowchart|journey)\s/i.test(trimmed)) {
-          return trimmed;
-        }
+  function generateUserStoriesIfNeeded() {
+      if (!userStoriesContent) {
+          generateUserStories();
       }
-      // Fallback
-      if (parts[0].trim().length > 0) return parts[0].trim();
-    }
-    
-    return clean;
   }
-
-  async function renderDiagram(type: 'er' | 'uml' | 'flowchart' | 'journey') {
-    let code = '';
-    let container: HTMLElement | undefined;
-    
-    if (type === 'er') {
-        code = erCode;
-        container = mermaidContainer;
-    } else if (type === 'uml') {
-        code = umlCode;
-        container = umlContainer;
-    } else if (type === 'flowchart') {
-        code = flowchartCode;
-        container = flowchartContainer;
-    } else {
-        code = journeyCode;
-        container = journeyContainer;
-    }
-    
-    if (!code || !container) return;
-    
-    // Clean the code
-    code = cleanMermaidCode(code);
-    
-    // Reset view when re-rendering
-    handleResetView(type);
-    
-    try {
-      container.innerHTML = '';
-      const { svg } = await mermaid.render('mermaid-svg-' + type + '-' + Date.now(), code);
-      container.innerHTML = svg;
-    } catch (error) {
-      console.error(`Mermaid ${type} render error:`, error);
-      container.innerHTML = `<div class="error-msg">Failed to render diagram: ${error}</div>`;
-    }
-  }
-
-  async function handleGenerateUml() {
-    if (!outputContent) return;
-    
-    // Reset state
-    isGeneratingUml = true;
-    umlError = '';
-    cleanupListeners();
-    
-    // Switch to editor view
-    umlTab = 'editor';
-    umlHistory.push(umlCode); // Checkpoint
-    umlCode = ''; 
-    
-    try {
-      const unlistenChunk = await listen<string>('uml:chunk', (event) => {
-        umlCode += event.payload;
-      });
-      
-      const unlistenDone = await listen('uml:done', () => {
-        isGeneratingUml = false;
-        cleanupListeners();
-        saveProjectUmlDiagram(umlCode);
-      });
-      
-      const unlistenError = await listen<string>('uml:error', (event) => {
-        console.error('UML stream error:', event.payload);
-        umlError = event.payload;
-        isGeneratingUml = false;
-        cleanupListeners();
-      });
-      
-      unlistenFunctions.push(unlistenChunk, unlistenDone, unlistenError);
-      
-      await invoke('refine_uml_diagram_with_llm_stream', { content: refinedContent || outputContent });
-    } catch (err) {
-      console.error('UML generation failed:', err);
-      umlError = String(err);
-      isGeneratingUml = false;
-      cleanupListeners();
-    }
-  }
-
-
-
-  async function handleGenerateEr() {
-    if (!outputContent) return;
-    
-    // Reset state
-    isGeneratingEr = true;
-    erError = '';
-    cleanupListeners();
-    
-    // Switch to editor view to see it streaming in
-    erTab = 'editor';
-    erHistory.push(erCode); // Checkpoint
-    erCode = '';  
-    
-    try {
-      const unlistenChunk = await listen<string>('er:chunk', (event) => {
-        erCode += event.payload;
-      });
-      
-      const unlistenDone = await listen('er:done', () => {
-        isGeneratingEr = false;
-        cleanupListeners();
-        saveProjectErDiagram(erCode);
-      });
-      
-      const unlistenError = await listen<string>('er:error', (event) => {
-        console.error('ER stream error:', event.payload);
-        erError = event.payload;
-        isGeneratingEr = false;
-        cleanupListeners();
-      });
-      
-      unlistenFunctions.push(unlistenChunk, unlistenDone, unlistenError);
-      
-      await invoke('refine_er_diagram_with_llm_stream', { content: refinedContent || outputContent });
-    } catch (err) {
-      console.error('ER generation failed:', err);
-      erError = String(err);
-      isGeneratingEr = false;
-      cleanupListeners();
-    }
-  }
-
-  async function handleSaveEr() {
-    if (!erCode) return;
-    try {
-      await saveProjectErDiagram(erCode);
-      
-      // Feedback
-      const indicator = document.createElement('div');
-      indicator.className = 'copy-indicator';
-      indicator.textContent = 'ER Diagram Saved!';
-      document.body.appendChild(indicator);
-      setTimeout(() => indicator.remove(), 1000);
-    } catch (err) {
-      console.error('Failed to save ER diagram:', err);
-    }
-  }
-
-
-
-
-
-  async function handleSaveUml() {
-    if (!umlCode) return;
-    try {
-      await saveProjectUmlDiagram(umlCode);
-      
-      // Feedback
-      const indicator = document.createElement('div');
-      indicator.className = 'copy-indicator';
-      indicator.textContent = 'UML Diagram Saved!';
-      document.body.appendChild(indicator);
-      setTimeout(() => indicator.remove(), 1000);
-    } catch (err) {
-      console.error('Failed to save UML diagram:', err);
-    }
-  }
-
-  async function handleGenerateFlowchart() {
-    if (!outputContent) return;
-    
-    // Reset state
-    isGeneratingFlowchart = true;
-    flowchartError = '';
-    cleanupListeners();
-    
-    // Switch to editor view
-    flowchartTab = 'editor';
-    flowchartHistory.push(flowchartCode); // Checkpoint
-    flowchartCode = ''; 
-    
-    try {
-      const unlistenChunk = await listen<string>('flowchart:chunk', (event) => {
-        flowchartCode += event.payload;
-      });
-      
-      const unlistenDone = await listen('flowchart:done', () => {
-        isGeneratingFlowchart = false;
-        cleanupListeners();
-        saveProjectFlowchart(flowchartCode);
-      });
-      
-      const unlistenError = await listen<string>('flowchart:error', (event) => {
-        console.error('Flowchart stream error:', event.payload);
-        flowchartError = event.payload;
-        isGeneratingFlowchart = false;
-        cleanupListeners();
-      });
-      
-      unlistenFunctions.push(unlistenChunk, unlistenDone, unlistenError);
-      
-      await invoke('refine_flowchart_with_llm_stream', { content: refinedContent || outputContent });
-    } catch (err) {
-      console.error('Flowchart generation failed:', err);
-      flowchartError = String(err);
-      isGeneratingFlowchart = false;
-      cleanupListeners();
-    }
-  }
-
-  async function handleSaveFlowchart() {
-    if (!flowchartCode) return;
-    try {
-      await saveProjectFlowchart(flowchartCode);
-      
-      const indicator = document.createElement('div');
-      indicator.className = 'copy-indicator';
-      indicator.textContent = 'Flowchart Saved!';
-      document.body.appendChild(indicator);
-      setTimeout(() => indicator.remove(), 1000);
-    } catch (err) {
-      console.error('Failed to save Flowchart:', err);
-    }
-  }
-
   async function handleRefine() {
     if (!outputContent) return;
     
@@ -655,64 +240,7 @@
     copyToClipboard(content);
   }
 
-  async function handleGenerateJourney() {
-    if (!outputContent) return;
-    
-    // Reset state
-    isGeneratingJourney = true;
-    journeyError = '';
-    cleanupListeners();
-    
-    // Switch to editor view
-    journeyTab = 'editor';
-    journeyHistory.push(journeyCode); 
-    journeyCode = ''; 
-    
-    try {
-      const unlistenChunk = await listen<string>('journey:chunk', (event) => {
-        journeyCode += event.payload;
-      });
-      
-      const unlistenDone = await listen('journey:done', () => {
-        isGeneratingJourney = false;
-        cleanupListeners();
-        saveProjectUserJourney(journeyCode);
-      });
-      
-      const unlistenError = await listen<string>('journey:error', (event) => {
-        console.error('Journey stream error:', event.payload);
-        journeyError = event.payload;
-        isGeneratingJourney = false;
-        cleanupListeners();
-      });
-      
-      unlistenFunctions.push(unlistenChunk, unlistenDone, unlistenError);
-      
-      await invoke('refine_user_journey_with_llm_stream', { content: refinedContent || outputContent });
-    } catch (err) {
-      console.error('Journey generation failed:', err);
-      journeyError = String(err);
-      isGeneratingJourney = false;
-      cleanupListeners();
-    }
-  }
-
-  async function handleSaveJourney() {
-    if (!journeyCode) return;
-    try {
-      await saveProjectUserJourney(journeyCode);
-      
-      const indicator = document.createElement('div');
-      indicator.className = 'copy-indicator';
-      indicator.textContent = 'Journey Saved!';
-      document.body.appendChild(indicator);
-      setTimeout(() => indicator.remove(), 1000);
-    } catch (err) {
-      console.error('Failed to save Journey:', err);
-    }
-  }
-
-  async function handleGenerateStories() {
+  async function generateUserStories() {
     if (!outputContent) return;
     
     // Reset state
@@ -768,61 +296,8 @@
     }
   }
 
-  function handleMergedEditorKeydown(e: KeyboardEvent, type: 'er' | 'uml' | 'flowchart' | 'journey') {
-    if (e.ctrlKey && e.key.toLowerCase() === 'z') {
-      e.preventDefault();
-      
-      const isRedo = e.shiftKey;
-      let history: UndoHistory<string>;
-      let currentCode: string;
-      
-      if (type === 'er') {
-        history = erHistory;
-        currentCode = erCode;
-      } else if (type === 'uml') {
-        history = umlHistory;
-        currentCode = umlCode;
-      } else if (type === 'flowchart') {
-        history = flowchartHistory;
-        currentCode = flowchartCode;
-      } else {
-        history = journeyHistory;
-        currentCode = journeyCode;
-      }
-      
-      const newState = isRedo ? history.redo(currentCode) : history.undo(currentCode);
-      
-      if (newState !== null) {
-        if (type === 'er') erCode = newState;
-        else if (type === 'uml') umlCode = newState;
-        else if (type === 'flowchart') flowchartCode = newState;
-        else journeyCode = newState;
-      }
-    }
-  }
+  // Dead code removed: handleMergedEditorKeydown, handleEditorBlur, handleEditorScroll, line counts
 
-  function handleEditorBlur(type: 'er' | 'uml' | 'flowchart' | 'journey') {
-    if (type === 'er') erHistory.push(erCode);
-    else if (type === 'uml') umlHistory.push(umlCode);
-    else if (type === 'flowchart') flowchartHistory.push(flowchartCode);
-    else journeyHistory.push(journeyCode);
-  }
-
-  function handleEditorScroll(e: UIEvent) {
-    const textarea = e.target as HTMLTextAreaElement;
-    const wrapper = textarea.parentElement;
-    if (wrapper) {
-      const lineNumbers = wrapper.querySelector('.line-numbers');
-      if (lineNumbers) {
-        lineNumbers.scrollTop = textarea.scrollTop;
-      }
-    }
-  }
-
-  $: erLineCount = erCode ? erCode.split('\n').length : 1;
-  $: umlLineCount = umlCode ? umlCode.split('\n').length : 1;
-  $: flowchartLineCount = flowchartCode ? flowchartCode.split('\n').length : 1;
-  $: journeyLineCount = journeyCode ? journeyCode.split('\n').length : 1;
 
   async function handleSaveToHistory() {
     if (!refinedContent) return;
@@ -1028,409 +503,143 @@
         {/if}
       </div>
     {:else if activeTab === 'er'}
-      <div class="refine-wrapper">
-        <div class="refine-tabs">
-          <button 
-            class="refine-tab-btn {erTab === 'editor' ? 'active' : ''}" 
-            on:click={() => switchErTab('editor')}
-          >
-            Editor
-          </button>
-          <button 
-            class="refine-tab-btn {erTab === 'render' ? 'active' : ''}" 
-            on:click={() => switchErTab('render')}
-          >
-            Render
-          </button>
+        <div class="workspace-wrapper">
+             <DiagramWorkspace 
+                type="er" 
+                bind:code={erCode}
+                history={erChatHistory}
+                on:update={() => saveProjectErDiagram(erCode)}
+            />
         </div>
 
-        <div class="er-container">
-           {#if erTab === 'editor'}
-              <div class="er-editor-container">
-                  <div class="editor-wrapper">
-                    <div class="line-numbers">
-                      {#each Array(erLineCount) as _, i}
-                        <span class="line-number">{i + 1}</span>
-                      {/each}
-                    </div>
-                    <textarea 
-                      class="er-editor" 
-                      bind:value={erCode}
-                      placeholder="Mermaid ER diagram code will appear here..."
-                      on:keydown={(e) => handleMergedEditorKeydown(e, 'er')}
-                      on:blur={() => handleEditorBlur('er')}
-                      on:input={() => debouncedErPush(erCode)}
-                      on:scroll={handleEditorScroll}
-                    ></textarea>
-                  </div>
-                 
-                 <div class="refine-actions">
-                   {#if isGeneratingEr}
-                     <div class="generating-indicator">
-                        <div class="spinner-small"></div> Generating...
-                     </div>
-                   {:else}
-                    <button class="action-btn secondary" on:click={handleGenerateEr}>
-                      {erCode ? 'Re-generate from Refined' : 'Generate from Refined'}
-                    </button>
-                    <button class="action-btn primary" on:click={handleSaveEr} disabled={!erCode}>
-                      Save
-                    </button>
-                   {/if}
-                 </div>
-                 {#if erError}
-                    <div class="error-msg">{erError}</div>
-                 {/if}
-              </div>
-           {:else}
-              <div 
-                class="er-render-container" 
-                role="region"
-                aria-label="ER Diagram Render View"
-                on:wheel={(e) => handleWheel(e, 'er')}
-                on:mousedown={(e) => handleMouseDown(e, 'er')}
-                on:mousemove={(e) => handleMouseMove(e, 'er')}
-                on:mouseup={() => handleMouseUp('er')}
-                on:mouseleave={() => handleMouseUp('er')}
-                style="cursor: {isPanning ? 'grabbing' : 'grab'};"
-              >
-                <div 
-                  class="zoom-container"
-                  style="transform: translate({panX}px, {panY}px) scale({zoomScale});"
-                  bind:this={mermaidContainer}
-                >
-                  <!-- Mermaid diagram rendered here -->
-                  {#if !erCode}
-                    <div class="empty-state-small">
-                       <p>Generate a diagram first.</p>
-                    </div>
-                  {/if}
-                </div>
-                
-                <div class="zoom-controls">
-                  <button class="zoom-btn" on:click={() => handleZoomIn('er')} title="Zoom In">+</button>
-                  <button class="zoom-btn" on:click={() => handleZoomOut('er')} title="Zoom Out">-</button>
-                  <button class="zoom-btn" on:click={() => handleResetView('er')} title="Reset View">Reset</button>
-                </div>
-              </div>
-           {/if}
-        </div>
-      </div>
     {:else if activeTab === 'uml'}
-      <div class="refine-wrapper">
-        <div class="refine-tabs">
-          <button 
-            class="refine-tab-btn {umlTab === 'editor' ? 'active' : ''}" 
-            on:click={() => switchUmlTab('editor')}
-          >
-            Editor
-          </button>
-          <button 
-            class="refine-tab-btn {umlTab === 'render' ? 'active' : ''}" 
-            on:click={() => switchUmlTab('render')}
-          >
-            Render
-          </button>
+        <div class="workspace-wrapper">
+             <DiagramWorkspace 
+                type="uml" 
+                bind:code={umlCode} 
+                history={umlChatHistory}
+                on:update={() => saveProjectUmlDiagram(umlCode)}
+            />
         </div>
-
-        <div class="er-container">
-           {#if umlTab === 'editor'}
-              <div class="er-editor-container">
-                  <div class="editor-wrapper">
-                    <div class="line-numbers">
-                      {#each Array(umlLineCount) as _, i}
-                        <span class="line-number">{i + 1}</span>
-                      {/each}
-                    </div>
-                    <textarea 
-                      class="er-editor" 
-                      bind:value={umlCode}
-                      placeholder="Mermaid Class diagram code will appear here..."
-                      on:keydown={(e) => handleMergedEditorKeydown(e, 'uml')}
-                      on:blur={() => handleEditorBlur('uml')}
-                      on:input={() => debouncedUmlPush(umlCode)}
-                      on:scroll={handleEditorScroll}
-                    ></textarea>
-                  </div>
-                 
-                 <div class="refine-actions">
-                   {#if isGeneratingUml}
-                     <div class="generating-indicator">
-                        <div class="spinner-small"></div> Generating...
-                     </div>
-                   {:else}
-                    <button class="action-btn secondary" on:click={handleGenerateUml}>
-                      {umlCode ? 'Re-generate from Refined' : 'Generate from Refined'}
-                    </button>
-                    <button class="action-btn primary" on:click={handleSaveUml} disabled={!umlCode}>
-                      Save
-                    </button>
-                   {/if}
-                 </div>
-                 {#if umlError}
-                    <div class="error-msg">{umlError}</div>
-                 {/if}
-              </div>
-           {:else}
-              <div 
-                class="er-render-container" 
-                role="region"
-                aria-label="UML Diagram Render View"
-                on:wheel={(e) => handleWheel(e, 'uml')}
-                on:mousedown={(e) => handleMouseDown(e, 'uml')}
-                on:mousemove={(e) => handleMouseMove(e, 'uml')}
-                on:mouseup={() => handleMouseUp('uml')}
-                on:mouseleave={() => handleMouseUp('uml')}
-                style="cursor: {isPanningUml ? 'grabbing' : 'grab'};"
-              >
-                <div 
-                  class="zoom-container"
-                  style="transform: translate({umlPanX}px, {umlPanY}px) scale({umlZoomScale});"
-                  bind:this={umlContainer}
-                >
-                  <!-- Mermaid diagram rendered here -->
-                  {#if !umlCode}
-                    <div class="empty-state-small">
-                       <p>Generate a diagram first.</p>
-                    </div>
-                  {/if}
-                </div>
-                
-                <div class="zoom-controls">
-                  <button class="zoom-btn" on:click={() => handleZoomIn('uml')} title="Zoom In">+</button>
-                  <button class="zoom-btn" on:click={() => handleZoomOut('uml')} title="Zoom Out">-</button>
-                  <button class="zoom-btn" on:click={() => handleResetView('uml')} title="Reset View">Reset</button>
-                </div>
-              </div>
-           {/if}
-        </div>
-      </div>
+        
     {:else if activeTab === 'flowchart'}
-      <div class="refine-wrapper">
-        <div class="refine-tabs">
-          <button 
-            class="refine-tab-btn {flowchartTab === 'editor' ? 'active' : ''}" 
-            on:click={() => switchFlowchartTab('editor')}
-          >
-            Editor
-          </button>
-          <button 
-            class="refine-tab-btn {flowchartTab === 'render' ? 'active' : ''}" 
-            on:click={() => switchFlowchartTab('render')}
-          >
-            Render
-          </button>
+        <div class="workspace-wrapper">
+             <DiagramWorkspace 
+                type="flowchart" 
+                bind:code={flowchartCode} 
+                history={flowchartChatHistory}
+                on:update={() => saveProjectFlowchart(flowchartCode)}
+            />
         </div>
-
-        <div class="er-container">
-           {#if flowchartTab === 'editor'}
-              <div class="er-editor-container">
-                  <div class="editor-wrapper">
-                    <div class="line-numbers">
-                      {#each Array(flowchartLineCount) as _, i}
-                        <span class="line-number">{i + 1}</span>
-                      {/each}
-                    </div>
-                    <textarea 
-                      class="er-editor" 
-                      bind:value={flowchartCode}
-                      placeholder="Mermaid Flowchart code will appear here..."
-                      on:keydown={(e) => handleMergedEditorKeydown(e, 'flowchart')}
-                      on:blur={() => handleEditorBlur('flowchart')}
-                      on:input={() => debouncedFlowchartPush(flowchartCode)}
-                      on:scroll={handleEditorScroll}
-                    ></textarea>
-                  </div>
-                 
-                 <div class="refine-actions">
-                   {#if isGeneratingFlowchart}
-                     <div class="generating-indicator">
-                        <div class="spinner-small"></div> Generating...
-                     </div>
-                   {:else}
-                    <button class="action-btn secondary" on:click={handleGenerateFlowchart}>
-                      {flowchartCode ? 'Re-generate from Refined' : 'Generate from Refined'}
-                    </button>
-                    <button class="action-btn primary" on:click={handleSaveFlowchart} disabled={!flowchartCode}>
-                      Save
-                    </button>
-                   {/if}
-                 </div>
-                 {#if flowchartError}
-                    <div class="error-msg">{flowchartError}</div>
-                 {/if}
-              </div>
-           {:else}
-              <div 
-                class="er-render-container" 
-                role="region"
-                aria-label="Flowchart Render View"
-                on:wheel={(e) => handleWheel(e, 'flowchart')}
-                on:mousedown={(e) => handleMouseDown(e, 'flowchart')}
-                on:mousemove={(e) => handleMouseMove(e, 'flowchart')}
-                on:mouseup={() => handleMouseUp('flowchart')}
-                on:mouseleave={() => handleMouseUp('flowchart')}
-                style="cursor: {isPanningFlowchart ? 'grabbing' : 'grab'};"
-              >
-                <div 
-                  class="zoom-container"
-                  style="transform: translate({flowchartPanX}px, {flowchartPanY}px) scale({flowchartZoomScale});"
-                  bind:this={flowchartContainer}
-                >
-                  <!-- Mermaid diagram rendered here -->
-                  {#if !flowchartCode}
-                    <div class="empty-state-small">
-                       <p>Generate a flowchart first.</p>
-                    </div>
-                  {/if}
-                </div>
-                
-                <div class="zoom-controls">
-                  <button class="zoom-btn" on:click={() => handleZoomIn('flowchart')} title="Zoom In">+</button>
-                  <button class="zoom-btn" on:click={() => handleZoomOut('flowchart')} title="Zoom Out">-</button>
-                  <button class="zoom-btn" on:click={() => handleResetView('flowchart')} title="Reset View">Reset</button>
-                </div>
-              </div>
-           {/if}
-        </div>
-      </div>
-
-    
+        
     {:else if activeTab === 'journey'}
-      <div class="refine-wrapper">
-        <div class="refine-tabs">
-          <button 
-            class="refine-tab-btn {journeyTab === 'editor' ? 'active' : ''}" 
-            on:click={() => switchJourneyTab('editor')}
-          >
-            Editor
-          </button>
-          <button 
-            class="refine-tab-btn {journeyTab === 'render' ? 'active' : ''}" 
-            on:click={() => switchJourneyTab('render')}
-          >
-            Render
-          </button>
-          <button 
-            class="refine-tab-btn {journeyTab === 'showcase' ? 'active' : ''}" 
-            on:click={() => switchJourneyTab('showcase')}
-          >
-            Showcase
-          </button>
-        </div>
-
-        <div class="er-container">
-           {#if journeyTab === 'editor'}
-              <div class="er-editor-container">
-                  <div class="editor-wrapper">
-                    <div class="line-numbers">
-                      {#each Array(journeyLineCount) as _, i}
-                        <span class="line-number">{i + 1}</span>
-                      {/each}
-                    </div>
-                    <textarea 
-                      class="er-editor" 
-                      bind:value={journeyCode}
-                      placeholder="Mermaid Journey code will appear here..."
-                      on:keydown={(e) => handleMergedEditorKeydown(e, 'journey')}
-                      on:blur={() => handleEditorBlur('journey')}
-                      on:input={() => debouncedJourneyPush(journeyCode)}
-                      on:scroll={handleEditorScroll}
-                    ></textarea>
-                  </div>
-                 
-                 <div class="refine-actions">
-                   {#if isGeneratingJourney}
-                     <div class="generating-indicator">
-                        <div class="spinner-small"></div> Generating...
-                     </div>
-                   {:else}
-                    <button class="action-btn secondary" on:click={handleGenerateJourney}>
-                      {journeyCode ? 'Re-generate Journey' : 'Generate Journey'}
-                    </button>
-                    <button class="action-btn primary" on:click={handleSaveJourney} disabled={!journeyCode}>
-                      Save Journey
-                    </button>
-                   {/if}
-                 </div>
-                 {#if journeyError}
-                    <div class="error-msg">{journeyError}</div>
-                 {/if}
-              </div>
-           {:else if journeyTab === 'render'}
-              <div 
-                class="er-render-container" 
-                role="region"
-                aria-label="Journey Map Render View"
-                on:wheel={(e) => handleWheel(e, 'journey')}
-                on:mousedown={(e) => handleMouseDown(e, 'journey')}
-                on:mousemove={(e) => handleMouseMove(e, 'journey')}
-                on:mouseup={() => handleMouseUp('journey')}
-                on:mouseleave={() => handleMouseUp('journey')}
-                style="cursor: {isPanningJourney ? 'grabbing' : 'grab'};"
-              >
-                <div 
-                  class="zoom-container"
-                  style="transform: translate({journeyPanX}px, {journeyPanY}px) scale({journeyZoomScale});"
-                  bind:this={journeyContainer}
-                >
-                  <!-- Mermaid diagram rendered here -->
-                  {#if !journeyCode}
-                    <div class="empty-state-small">
-                       <p>Generate a journey map first.</p>
-                       <button class="action-btn secondary" on:click={handleGenerateJourney}>Generate</button>
-                    </div>
-                  {/if}
+           <!-- Journey has a special 'Showcase' tab -->
+           <div class="workspace-wrapper journey-wrapper">
+                <div class="journey-controls">
+                     <!-- External toggle for Showcase vs Diagram modes -->
+                     <button 
+                        class="toggle-btn {journeyTab === 'showcase' ? '' : 'active'}" 
+                        on:click={() => journeyTab = 'render'}
+                     >
+                        Diagram
+                     </button>
+                     <button 
+                        class="toggle-btn {journeyTab === 'showcase' ? 'active' : ''}" 
+                        on:click={() => { journeyTab = 'showcase'; generateUserStoriesIfNeeded(); }}
+                     >
+                        Showcase
+                     </button>
                 </div>
                 
-                <div class="zoom-controls">
-                  <button class="zoom-btn" on:click={() => handleZoomIn('journey')} title="Zoom In">+</button>
-                  <button class="zoom-btn" on:click={() => handleZoomOut('journey')} title="Zoom Out">-</button>
-                  <button class="zoom-btn" on:click={() => handleResetView('journey')} title="Reset View">Reset</button>
-                </div>
-              </div>
-           {:else}
-              <!-- Showcase Tab -->
-              <div class="er-editor-container">
-                  <div class="editor-wrapper">
-                    <!-- Simple text area for stories for now, logic similar to others -->
-                     <!-- We don't need line numbers strictly for showcase but consistent looking -->
-                     <!-- Actually showcase implies "Rendered" but stories are text. 
-                          Lets make it an editor/viewer for markdown. -->
-                    <textarea 
-                      class="er-editor" 
-                      bind:value={userStoriesContent}
-                      placeholder="User Stories will appear here..."
-                      style="font-family: sans-serif; line-height: 1.5;"
-                    ></textarea> 
-                  </div>
-                 
-                 <div class="refine-actions">
-                   {#if isGeneratingStories}
-                     <div class="generating-indicator">
-                        <div class="spinner-small"></div> Generating Stories...
-                     </div>
-                   {:else}
-                    <button class="action-btn secondary" on:click={handleGenerateStories}>
-                      {userStoriesContent ? 'Re-generate Stories' : 'Generate Stories'}
-                    </button>
-                    <button class="action-btn primary" on:click={handleSaveStories} disabled={!userStoriesContent}>
-                      Save Stories
-                    </button>
-                   {/if}
-                 </div>
-                 {#if storiesError}
-                    <div class="error-msg">{storiesError}</div>
-                 {/if}
-              </div>
-           {/if}
-        </div>
-      </div>
-    {/if}
+                {#if journeyTab === 'showcase'}
+                   <div class="showcase-view">
+                       <!-- Keeps existing showcase logic -->
+                       <div class="showcase-container">
+                           {#if isGeneratingStories}
+                               <div class="loading-overlay">
+                                   <div class="spinner"></div>
+                                   <p>Generating User Stories...</p>
+                               </div>
+                           {/if}
+                           
+                           {#if storiesError}
+                               <div class="error-msg">{storiesError}</div>
+                           {/if}
+                           
+                           <div class="stories-content">
+                               {#if !userStoriesContent && !isGeneratingStories}
+                                    <div class="empty-state">
+                                        <p>No user stories generated yet.</p>
+                                        <button class="action-btn" on:click={generateUserStories}>Generate Stories</button>
+                                    </div>
+                               {:else}
+                                    <pre>{userStoriesContent}</pre>
+                               {/if}
+                           </div>
+                       </div>
+                   </div>
+                {:else}
+                    <DiagramWorkspace 
+                        type="journey" 
+                        bind:code={journeyCode} 
+                        history={journeyChatHistory}
+                        on:update={() => saveProjectUserJourney(journeyCode)}
+                    />
+                {/if}
+           </div>
+      {/if}
+    </div>
   </div>
-</div>
+
 
 <style>
+/* ... existing styles ... */
+.workspace-wrapper {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.journey-wrapper {
+    position: relative;
+}
+
+.journey-controls {
+    position: absolute;
+    top: 0.5rem;
+    right: 15rem; /* Adjust based on toolbar layout */
+    z-index: 10;
+    display: flex;
+    gap: 0.5rem;
+    background: #161b22;
+    padding: 0.25rem;
+    border-radius: 4px;
+    border: 1px solid #30363d;
+}
+
+.toggle-btn {
+    background: transparent;
+    border: none;
+    color: #8b949e;
+    padding: 0.25rem 0.75rem;
+    font-size: 0.8rem;
+    cursor: pointer;
+    border-radius: 4px;
+}
+
+.toggle-btn.active {
+    background: #1f6feb;
+    color: white;
+}
+
+.showcase-view {
+    flex: 1;
+    overflow: auto;
+    padding: 1rem;
+}
+ 
+
   .merged-output-container {
     flex: 1;
     display: flex;

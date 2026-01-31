@@ -309,6 +309,10 @@ pub struct Refinement {
     pub original_content: String,
     pub refined_content: String,
     pub timestamp: String,
+    #[serde(default)]
+    pub kind: Option<String>, // 'text', 'er', 'uml', 'flowchart', 'journey'
+    #[serde(default)]
+    pub mode: Option<String>, // 'edit', 'ask'
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -6,6 +6,8 @@ export interface Refinement {
   original_content: string;
   refined_content: string;
   timestamp: string;
+  kind?: string;
+  mode?: 'edit' | 'ask';
 }
 
 export interface Topic {
