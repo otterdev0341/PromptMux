@@ -15,6 +15,8 @@
 
   let activeTab: 'editor' | 'render' | 'chat' = 'render';
   let chatMode: 'edit' | 'ask' = 'edit';
+
+  let failedMessage: { content: string, mode: 'edit' | 'ask', error: string } | null = null;
   let chatInput = '';
   let isChatGenerating = false;
   let error = '';
@@ -129,7 +131,9 @@
       if (!chatInput.trim() || isChatGenerating) return;
       
       const instruction = chatInput;
+      const currentMode = chatMode; // Capture current mode
       chatInput = '';
+      failedMessage = null; // Clear any previous failure
       isChatGenerating = true;
       let streamedResponse = '';
       
@@ -201,8 +205,22 @@
               } else {
                   error += "Please wait a moment before trying again.";
               }
+              
+              failedMessage = {
+                  content: instruction,
+                  mode: currentMode,
+                  error: error
+              };
+              // Clear global error so it doesn't show the banner at top, we show it in bubble
+              error = ''; 
           } else {
               error = "Error: " + rawMsg;
+              failedMessage = {
+                  content: instruction,
+                  mode: currentMode,
+                  error: rawMsg
+              };
+               error = '';
           }
       }
   }
@@ -325,6 +343,24 @@
                                 </small>
                             </div>
                         {/each}
+                        
+                        {#if failedMessage}
+                             <div class="chat-bubble user failed">
+                                <div class="bubble-content">{failedMessage.content}</div>
+                            </div>
+                            <div class="chat-bubble error-retry">
+                                <div class="error-content">
+                                    <span>{failedMessage.error}</span>
+                                    <button class="retry-btn" on:click={() => {
+                                        chatInput = failedMessage?.content || '';
+                                        chatMode = failedMessage?.mode || 'edit';
+                                        handleSendMessage();
+                                    }}>
+                                        ↻ Retry
+                                    </button>
+                                </div>
+                            </div>
+                        {/if}
                         {#if isChatGenerating}
                              <div class="chat-bubble ai generating">...</div>
                         {/if}
@@ -532,6 +568,44 @@
         color: #f85149;
         width: 90%;
         text-align: center;
+    }
+    
+    .chat-bubble.user.failed {
+        opacity: 0.7;
+        border: 1px dashed #f85149;
+    }
+
+    .chat-bubble.error-retry {
+        align-self: flex-start; /* Or center? */
+        background: #3d1616;
+        border: 1px solid #f85149;
+        color: #f85149;
+        max-width: 90%;
+        padding: 0.5rem;
+    }
+
+    .error-content {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        align-items: center;
+    }
+
+    .retry-btn {
+        background: #238636;
+        color: white;
+        border: none;
+        padding: 0.3rem 0.8rem;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 0.85rem;
+        display: flex;
+        align-items: center;
+        gap: 0.3rem;
+    }
+    
+    .retry-btn:hover {
+        background: #2ea043;
     }
     
     .chat-bubble.ai.ask-mode {
