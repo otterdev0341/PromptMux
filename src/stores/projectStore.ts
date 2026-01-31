@@ -98,6 +98,34 @@ export interface Project {
   er_diagram?: string;
   uml_diagram?: string;
   flowchart?: string;
+  user_journey?: string;
+  user_stories?: string;
+}
+
+export async function saveProjectUserJourney(content: string): Promise<void> {
+  try {
+    const activeProject = get(projectStore);
+    if (!activeProject) throw new Error('No active project');
+
+    await invoke('save_project_user_journey', { projectId: activeProject.id, content });
+    await loadProject();
+  } catch (error) {
+    console.error('Failed to save project User Journey:', error);
+    throw error;
+  }
+}
+
+export async function saveProjectUserStories(content: string): Promise<void> {
+  try {
+    const activeProject = get(projectStore);
+    if (!activeProject) throw new Error('No active project');
+
+    await invoke('save_project_user_stories', { projectId: activeProject.id, content });
+    await loadProject();
+  } catch (error) {
+    console.error('Failed to save project User Stories:', error);
+    throw error;
+  }
 }
 
 export interface Workspace {

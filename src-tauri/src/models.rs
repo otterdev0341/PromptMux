@@ -92,6 +92,8 @@ pub struct Project {
     pub er_diagram: Option<String>,
     pub uml_diagram: Option<String>,
     pub flowchart: Option<String>,
+    pub user_journey: Option<String>,
+    pub user_stories: Option<String>,
 }
 
 impl Project {
@@ -107,6 +109,8 @@ impl Project {
             er_diagram: None,
             uml_diagram: None,
             flowchart: None,
+            user_journey: None,
+            user_stories: None,
         }
     }
 

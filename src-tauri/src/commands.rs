@@ -3,7 +3,7 @@ use crate::state::AppState;
 use std::fs;
 use std::path::PathBuf;
 use tauri::State;
-
+use tauri::AppHandle;
 /// Get the current platform/OS
 #[tauri::command]
 pub fn get_platform() -> String {
@@ -1063,6 +1063,339 @@ Output Requirement:
             }
         }
         let _ = app.emit("flowchart:done", ());
+    });
+
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn save_project_user_journey(
+    state: State<'_, AppState>,
+    project_id: String,
+    content: String,
+) -> Result<(), String> {
+    let mut workspace = state.workspace.lock().map_err(|e| e.to_string())?;
+    
+    if let Some(project) = workspace.get_project_mut(&project_id) {
+        project.user_journey = Some(content);
+        project.updated_at = chrono::Utc::now().to_rfc3339();
+    } else {
+        return Err("Project not found".to_string());
+    }
+    
+    // Save to file
+    if let Err(e) = save_workspace(&workspace, &state.data_dir) {
+        return Err(format!("Failed to save workspace: {}", e));
+    }
+    
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn save_project_user_stories(
+    state: State<'_, AppState>,
+    project_id: String,
+    content: String,
+) -> Result<(), String> {
+    let mut workspace = state.workspace.lock().map_err(|e| e.to_string())?;
+    
+    if let Some(project) = workspace.get_project_mut(&project_id) {
+        project.user_stories = Some(content);
+        project.updated_at = chrono::Utc::now().to_rfc3339();
+    } else {
+        return Err("Project not found".to_string());
+    }
+    
+    // Save to file
+    if let Err(e) = save_workspace(&workspace, &state.data_dir) {
+        return Err(format!("Failed to save workspace: {}", e));
+    }
+    
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn refine_user_journey_with_llm_stream(
+    app: AppHandle,
+    _state: State<'_, AppState>, // State not needed if we load settings from file via helper, but kept for signature consistency if needed
+    content: String,
+) -> Result<(), String> {
+    let settings = load_settings()?;
+    
+    let is_anthropic = settings.provider == "anthropic";
+    
+    // Create client
+    let client = reqwest::Client::new();
+    
+    let system_prompt = "You are an expert UX designer and Product Manager. Your task is to analyze the provided software project description and generate a Mermaid User Journey Map (`journey`) that visualizes the user's experience.
+
+Guidelines:
+1. Syntax: Start with `journey`.
+2. Structure:
+   - title: A clear title for the journey.
+   - section: Group actions into logical phases (e.g., `section Onboarding`, `section Usage`, `section Support`).
+   - Task format: `Task name: Score: Actor1, Actor2`
+     - Score: 1-5 (1=bad, 5=delight)
+     - Actors: Who is performing the action (e.g., `User`, `System`, `Admin`).
+3. Content:
+   - Focus on the key interactions derived from the project description.
+   - Ensure the flow is logical and covers the main value proposition.
+
+Output Requirement:
+- Output ONLY the raw Mermaid code.
+- Do NOT include markdown code fences (```mermaid).
+- Do NOT include any explanations.
+- The output must start directly with `journey`.";
+
+    let request_body = if !is_anthropic {
+        // OpenAI Format
+        serde_json::json!({
+            "model": settings.model.unwrap_or("gpt-4".to_string()),
+            "stream": true,
+            "messages": [
+                {
+                    "role": "system",
+                    "content": system_prompt
+                },
+                {
+                    "role": "user",
+                    "content": format!("Generate a Mermaid User Journey for the following project description:\n\n{}", content)
+                }
+            ]
+        })
+    } else {
+        // Anthropic Format
+        serde_json::json!({
+            "model": settings.model.unwrap_or("claude-3-sonnet-20240229".to_string()),
+            "max_tokens": 4096,
+            "stream": true,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": format!("{}\n\nGenerate a Mermaid User Journey for the following project description:\n\n{}", system_prompt, content)
+                }
+            ]
+        })
+    };
+    
+    let url = if !is_anthropic {
+        format!("{}/chat/completions", settings.base_url.trim_end_matches('/'))
+    } else {
+        format!("{}/messages", settings.base_url.trim_end_matches('/'))
+    };
+    
+    // Construct request
+    let mut request_builder = client.post(&url)
+        .header("Content-Type", "application/json")
+        .json(&request_body);
+        
+    if is_anthropic {
+         request_builder = request_builder
+            .header("x-api-key", &settings.api_key)
+            .header("anthropic-version", "2023-06-01");
+    } else {
+         request_builder = request_builder.header("Authorization", format!("Bearer {}", settings.api_key));
+    }
+
+    // Send request
+    let response = request_builder
+        .send()
+        .await
+        .map_err(|e| format!("Failed to send request: {}", e))?;
+    
+    if !response.status().is_success() {
+        let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+        return Err(format!("LLM API error: {}", error_text));
+    }
+
+    // Spawn a task to handle streaming so we don't block
+    tauri::async_runtime::spawn(async move {
+        let mut stream = response.bytes_stream();
+        while let Some(item) = stream.next().await {
+            match item {
+                Ok(bytes) => {
+                    let chunk_str = String::from_utf8_lossy(&bytes);
+                    for line in chunk_str.lines() {
+                        let line = line.trim();
+                        if line.is_empty() { continue; }
+                        
+                        // Parse SSE
+                        if line.starts_with("data: ") {
+                            let data = &line[6..];
+                            if data == "[DONE]" {
+                                let _ = app.emit("journey:done", ());
+                                return;
+                            }
+                            
+                            if let Ok(json) = serde_json::from_str::<serde_json::Value>(data) {
+                                if !is_anthropic {
+                                    if let Some(content) = json["choices"][0]["delta"]["content"].as_str() {
+                                        let _ = app.emit("journey:chunk", content);
+                                    }
+                                } else {
+                                    if json["type"] == "content_block_delta" {
+                                        if let Some(text) = json["delta"]["text"].as_str() {
+                                            let _ = app.emit("journey:chunk", text);
+                                        }
+                                    }
+                                    if json["type"] == "message_stop" {
+                                        let _ = app.emit("journey:done", ());
+                                        return;
+                                    }
+                                }
+                            }
+                        } 
+                    }
+                }
+                Err(e) => {
+                    let _ = app.emit("journey:error", format!("Stream error: {}", e));
+                    return;
+                }
+            }
+        }
+        let _ = app.emit("journey:done", ());
+    });
+
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn refine_user_stories_with_llm_stream(
+    app: AppHandle,
+    _state: State<'_, AppState>,
+    content: String,
+) -> Result<(), String> {
+    let settings = load_settings()?;
+    
+    let is_anthropic = settings.provider == "anthropic";
+    
+    // Create client
+    let client = reqwest::Client::new();
+    
+    let system_prompt = "You are an expert Product Manager. Your task is to analyze the provided software project description and generate a comprehensive list of User Stories grouped by Feature.
+
+Guidelines:
+1. Format:
+   - Use Markdown.
+   - Group stories by `## Feature Name`.
+   - Each story should follow the standard format: `- **As a** <role>, **I want to** <action> **so that** <benefit>.`
+   - Optionally add acceptance criteria if relevant as a sub-list.
+2. Content:
+   - Ensure coverage of all key features mentioned or implied in the description.
+   - Include both functional and non-functional requirements (e.g., Install, Report).
+3. Tone: Professional and clear.
+
+Output Requirement:
+- Output only the markdown text.
+- Do NOT wrap the entire output in a code block.";
+
+    let request_body = if !is_anthropic {
+        // OpenAI Format
+        serde_json::json!({
+            "model": settings.model.unwrap_or("gpt-4".to_string()),
+            "stream": true,
+            "messages": [
+                {
+                    "role": "system",
+                    "content": system_prompt
+                },
+                {
+                    "role": "user",
+                    "content": format!("Generate User Stories for the following project description:\n\n{}", content)
+                }
+            ]
+        })
+    } else {
+        // Anthropic Format
+        serde_json::json!({
+            "model": settings.model.unwrap_or("claude-3-sonnet-20240229".to_string()),
+            "max_tokens": 4096,
+            "stream": true,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": format!("{}\n\nGenerate User Stories for the following project description:\n\n{}", system_prompt, content)
+                }
+            ]
+        })
+    };
+    
+    let url = if !is_anthropic {
+        format!("{}/chat/completions", settings.base_url.trim_end_matches('/'))
+    } else {
+        format!("{}/messages", settings.base_url.trim_end_matches('/'))
+    };
+    
+    // Construct request
+    let mut request_builder = client.post(&url)
+        .header("Content-Type", "application/json")
+        .json(&request_body);
+        
+    if is_anthropic {
+         request_builder = request_builder
+            .header("x-api-key", &settings.api_key)
+            .header("anthropic-version", "2023-06-01");
+    } else {
+         request_builder = request_builder.header("Authorization", format!("Bearer {}", settings.api_key));
+    }
+
+    // Send request
+    let response = request_builder
+        .send()
+        .await
+        .map_err(|e| format!("Failed to send request: {}", e))?;
+    
+    if !response.status().is_success() {
+        let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+        return Err(format!("LLM API error: {}", error_text));
+    }
+
+    // Spawn a task to handle streaming so we don't block
+    tauri::async_runtime::spawn(async move {
+        let mut stream = response.bytes_stream();
+        while let Some(item) = stream.next().await {
+            match item {
+                Ok(bytes) => {
+                    let chunk_str = String::from_utf8_lossy(&bytes);
+                    for line in chunk_str.lines() {
+                        let line = line.trim();
+                        if line.is_empty() { continue; }
+                        
+                        // Parse SSE
+                        if line.starts_with("data: ") {
+                            let data = &line[6..];
+                            if data == "[DONE]" {
+                                let _ = app.emit("stories:done", ());
+                                return;
+                            }
+                            
+                            if let Ok(json) = serde_json::from_str::<serde_json::Value>(data) {
+                                if !is_anthropic {
+                                    if let Some(content) = json["choices"][0]["delta"]["content"].as_str() {
+                                        let _ = app.emit("stories:chunk", content);
+                                    }
+                                } else {
+                                    if json["type"] == "content_block_delta" {
+                                        if let Some(text) = json["delta"]["text"].as_str() {
+                                            let _ = app.emit("stories:chunk", text);
+                                        }
+                                    }
+                                    if json["type"] == "message_stop" {
+                                        let _ = app.emit("stories:done", ());
+                                        return;
+                                    }
+                                }
+                            }
+                        } 
+                    }
+                }
+                Err(e) => {
+                    let _ = app.emit("stories:error", format!("Stream error: {}", e));
+                    return;
+                }
+            }
+        }
+        let _ = app.emit("stories:done", ());
     });
 
     Ok(())

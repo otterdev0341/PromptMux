@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { mergedOutput, projectStore, saveProjectRefinement, saveProjectErDiagram, saveProjectUmlDiagram, saveProjectFlowchart } from '../stores/projectStore';
+  import { mergedOutput, projectStore, saveProjectRefinement, saveProjectErDiagram, saveProjectUmlDiagram, saveProjectFlowchart, saveProjectUserJourney, saveProjectUserStories } from '../stores/projectStore';
   import type { Refinement } from '../stores/projectStore';
   import { invoke } from '@tauri-apps/api/core';
   import { listen } from '@tauri-apps/api/event';
@@ -10,11 +10,12 @@
 
   let outputContent = '';
   let refinedContent = '';
-  let activeTab: 'raw' | 'refine' | 'er' | 'uml' | 'flowchart' = 'raw';
+  let activeTab: 'raw' | 'refine' | 'er' | 'uml' | 'flowchart' | 'journey' = 'raw';
   let refineTab: 'generate' | 'history' = 'generate';
   let erTab: 'editor' | 'render' = 'render';
   let umlTab: 'editor' | 'render' = 'render';
   let flowchartTab: 'editor' | 'render' = 'render';
+  let journeyTab: 'editor' | 'render' | 'showcase' = 'render';
   let isRefining = false;
   let refineError = '';
   let focused = false;
@@ -59,6 +60,22 @@
   let flowchartStartX = 0;
   let flowchartStartY = 0;
   
+  // Journey State
+  let journeyCode = '';
+  let userStoriesContent = '';
+  let isGeneratingJourney = false;
+  let isGeneratingStories = false;
+  let journeyError = '';
+  let storiesError = '';
+  let journeyContainer: HTMLElement;
+  
+  let journeyZoomScale = 1;
+  let journeyPanX = 0;
+  let journeyPanY = 0;
+  let isPanningJourney = false;
+  let journeyStartX = 0;
+  let journeyStartY = 0;
+  
   // Track listeners to clean up
   let unlistenFunctions: (() => void)[] = [];
 
@@ -66,10 +83,12 @@
   const erHistory = new UndoHistory<string>();
   const umlHistory = new UndoHistory<string>();
   const flowchartHistory = new UndoHistory<string>();
+  const journeyHistory = new UndoHistory<string>();
 
   const debouncedErPush = debounce((code: string) => erHistory.push(code), 1000);
   const debouncedUmlPush = debounce((code: string) => umlHistory.push(code), 1000);
   const debouncedFlowchartPush = debounce((code: string) => flowchartHistory.push(code), 1000);
+  const debouncedJourneyPush = debounce((code: string) => journeyHistory.push(code), 1000);
 
   $: outputContent = $mergedOutput;
 
@@ -96,6 +115,12 @@
       if ($projectStore.flowchart) {
         flowchartCode = $projectStore.flowchart;
       }
+      if ($projectStore.user_journey) {
+        journeyCode = $projectStore.user_journey;
+      }
+      if ($projectStore.user_stories) {
+        userStoriesContent = $projectStore.user_stories;
+      }
     }
   });
 
@@ -118,6 +143,11 @@
       
       flowchartHistory.clear();
       flowchartHistory.push(flowchartCode);
+
+      journeyCode = $projectStore.user_journey || '';
+      userStoriesContent = $projectStore.user_stories || '';
+      journeyHistory.clear();
+      journeyHistory.push(journeyCode);
     }
   }
 
@@ -142,6 +172,8 @@
       tick().then(() => renderDiagram('uml'));
     } else if (tab === 'flowchart' && flowchartTab === 'render') {
       tick().then(() => renderDiagram('flowchart'));
+    } else if (tab === 'journey' && journeyTab === 'render') {
+      tick().then(() => renderDiagram('journey'));
     }
   }
 
@@ -169,12 +201,20 @@
       tick().then(() => renderDiagram('flowchart'));
     }
   }
+
+  function switchJourneyTab(tab: 'editor' | 'render' | 'showcase') {
+    journeyTab = tab;
+    if (tab === 'render') {
+      tick().then(() => renderDiagram('journey'));
+    }
+  }
   
   // Zoom Handler
-  function handleWheel(e: WheelEvent, type: 'er' | 'uml' | 'flowchart') {
+  function handleWheel(e: WheelEvent, type: 'er' | 'uml' | 'flowchart' | 'journey') {
     if ((type === 'er' && erTab !== 'render') || 
         (type === 'uml' && umlTab !== 'render') ||
-        (type === 'flowchart' && flowchartTab !== 'render')) return;
+        (type === 'flowchart' && flowchartTab !== 'render') ||
+        (type === 'journey' && journeyTab !== 'render')) return;
     e.preventDefault();
     
     const delta = e.deltaY > 0 ? 0.9 : 1.1;
@@ -182,16 +222,19 @@
       zoomScale = Math.max(0.1, Math.min(5, zoomScale * delta));
     } else if (type === 'uml') {
       umlZoomScale = Math.max(0.1, Math.min(5, umlZoomScale * delta));
-    } else {
+    } else if (type === 'flowchart') {
       flowchartZoomScale = Math.max(0.1, Math.min(5, flowchartZoomScale * delta));
+    } else if (type === 'journey') {
+      journeyZoomScale = Math.max(0.1, Math.min(5, journeyZoomScale * delta));
     }
   }
   
   // Pan Handlers
-  function handleMouseDown(e: MouseEvent, type: 'er' | 'uml' | 'flowchart') {
+  function handleMouseDown(e: MouseEvent, type: 'er' | 'uml' | 'flowchart' | 'journey') {
     if ((type === 'er' && erTab !== 'render') || 
         (type === 'uml' && umlTab !== 'render') ||
-        (type === 'flowchart' && flowchartTab !== 'render')) return;
+        (type === 'flowchart' && flowchartTab !== 'render') ||
+        (type === 'journey' && journeyTab !== 'render')) return;
     
     if (type === 'er') {
       isPanning = true;
@@ -201,14 +244,18 @@
       isPanningUml = true;
       umlStartX = e.clientX - umlPanX;
       umlStartY = e.clientY - umlPanY;
-    } else {
+    } else if (type === 'flowchart') {
       isPanningFlowchart = true;
       flowchartStartX = e.clientX - flowchartPanX;
       flowchartStartY = e.clientY - flowchartPanY;
+    } else if (type === 'journey') {
+      isPanningJourney = true;
+      journeyStartX = e.clientX - journeyPanX;
+      journeyStartY = e.clientY - journeyPanY;
     }
   }
   
-  function handleMouseMove(e: MouseEvent, type: 'er' | 'uml' | 'flowchart') {
+  function handleMouseMove(e: MouseEvent, type: 'er' | 'uml' | 'flowchart' | 'journey') {
     e.preventDefault();
     if (type === 'er') {
        if (!isPanning) return;
@@ -218,24 +265,30 @@
        if (!isPanningUml) return;
        umlPanX = e.clientX - umlStartX;
        umlPanY = e.clientY - umlStartY;
-    } else {
+    } else if (type === 'flowchart') {
        if (!isPanningFlowchart) return;
        flowchartPanX = e.clientX - flowchartStartX;
        flowchartPanY = e.clientY - flowchartStartY;
+    } else if (type === 'journey') {
+       if (!isPanningJourney) return;
+       journeyPanX = e.clientX - journeyStartX;
+       journeyPanY = e.clientY - journeyStartY;
     }
   }
   
-  function handleMouseUp(type: 'er' | 'uml' | 'flowchart') {
+  function handleMouseUp(type: 'er' | 'uml' | 'flowchart' | 'journey') {
     if (type === 'er') {
       isPanning = false;
     } else if (type === 'uml') {
       isPanningUml = false;
-    } else {
+    } else if (type === 'flowchart') {
       isPanningFlowchart = false;
+    } else if (type === 'journey') {
+      isPanningJourney = false;
     }
   }
   
-  function handleResetView(type: 'er' | 'uml' | 'flowchart') {
+  function handleResetView(type: 'er' | 'uml' | 'flowchart' | 'journey') {
     if (type === 'er') {
       zoomScale = 1;
       panX = 0;
@@ -244,30 +297,38 @@
       umlZoomScale = 1;
       umlPanX = 0;
       umlPanY = 0;
-    } else {
+    } else if (type === 'flowchart') {
       flowchartZoomScale = 1;
       flowchartPanX = 0;
       flowchartPanY = 0;
+    } else if (type === 'journey') {
+      journeyZoomScale = 1;
+      journeyPanX = 0;
+      journeyPanY = 0;
     }
   }
 
-  function handleZoomIn(type: 'er' | 'uml' | 'flowchart') {
+  function handleZoomIn(type: 'er' | 'uml' | 'flowchart' | 'journey') {
     if (type === 'er') {
       zoomScale = Math.min(5, zoomScale * 1.2);
     } else if (type === 'uml') {
       umlZoomScale = Math.min(5, umlZoomScale * 1.2);
-    } else {
+    } else if (type === 'flowchart') {
       flowchartZoomScale = Math.min(5, flowchartZoomScale * 1.2);
+    } else if (type === 'journey') {
+      journeyZoomScale = Math.min(5, journeyZoomScale * 1.2);
     }
   }
 
-  function handleZoomOut(type: 'er' | 'uml' | 'flowchart') {
+  function handleZoomOut(type: 'er' | 'uml' | 'flowchart' | 'journey') {
      if (type === 'er') {
       zoomScale = Math.max(0.1, zoomScale * 0.8);
     } else if (type === 'uml') {
       umlZoomScale = Math.max(0.1, umlZoomScale * 0.8);
-    } else {
+    } else if (type === 'flowchart') {
       flowchartZoomScale = Math.max(0.1, flowchartZoomScale * 0.8);
+    } else if (type === 'journey') {
+      journeyZoomScale = Math.max(0.1, journeyZoomScale * 0.8);
     }
   }
 
@@ -280,20 +341,20 @@
 
     // 2. Fix concatenation issues where newline is missing
     // Case A: ";graph" or "];graph" -> "];\n\ngraph"
-    clean = clean.replace(/([;\]\}\)])\s*(graph|flowchart)(\s|;)/gi, '$1\n\n$2$3');
+    clean = clean.replace(/([;\]\}\)])\s*(graph|flowchart|journey)(\s|;)/gi, '$1\n\n$2$3');
     
     // Case B: "wordgraph TD" (hallucination/typo) -> "word\n\ngraph TD"
     // Matches alphanumeric char, then graph/flowchart, then direction (TD, LR, etc.)
-    clean = clean.replace(/([a-z0-9])(graph|flowchart)\s+(TD|TB|BT|RL|LR)/gi, '$1\n\n$2 $3');
+    clean = clean.replace(/([a-z0-9])(graph|flowchart|journey)\s+(TD|TB|BT|RL|LR)/gi, '$1\n\n$2 $3');
     
     // 3. Keep only the first valid diagram block
     // Split by newline followed by graph/flowchart keyword
-    const parts = clean.split(/\n\s*(?=graph\s|flowchart\s)/i);
+    const parts = clean.split(/\n\s*(?=graph\s|flowchart\s|journey\s)/i);
     
     if (parts.length > 0) {
       for (const part of parts) {
         const trimmed = part.trim();
-        if (/^(graph|flowchart)\s/i.test(trimmed)) {
+        if (/^(graph|flowchart|journey)\s/i.test(trimmed)) {
           return trimmed;
         }
       }
@@ -304,7 +365,7 @@
     return clean;
   }
 
-  async function renderDiagram(type: 'er' | 'uml' | 'flowchart') {
+  async function renderDiagram(type: 'er' | 'uml' | 'flowchart' | 'journey') {
     let code = '';
     let container: HTMLElement | undefined;
     
@@ -314,9 +375,12 @@
     } else if (type === 'uml') {
         code = umlCode;
         container = umlContainer;
-    } else {
+    } else if (type === 'flowchart') {
         code = flowchartCode;
         container = flowchartContainer;
+    } else {
+        code = journeyCode;
+        container = journeyContainer;
     }
     
     if (!code || !container) return;
@@ -577,7 +641,120 @@
     copyToClipboard(content);
   }
 
-  function handleMergedEditorKeydown(e: KeyboardEvent, type: 'er' | 'uml' | 'flowchart') {
+  async function handleGenerateJourney() {
+    if (!outputContent) return;
+    
+    // Reset state
+    isGeneratingJourney = true;
+    journeyError = '';
+    cleanupListeners();
+    
+    // Switch to editor view
+    journeyTab = 'editor';
+    journeyHistory.push(journeyCode); 
+    journeyCode = ''; 
+    
+    try {
+      const unlistenChunk = await listen<string>('journey:chunk', (event) => {
+        journeyCode += event.payload;
+      });
+      
+      const unlistenDone = await listen('journey:done', () => {
+        isGeneratingJourney = false;
+        cleanupListeners();
+        saveProjectUserJourney(journeyCode);
+      });
+      
+      const unlistenError = await listen<string>('journey:error', (event) => {
+        console.error('Journey stream error:', event.payload);
+        journeyError = event.payload;
+        isGeneratingJourney = false;
+        cleanupListeners();
+      });
+      
+      unlistenFunctions.push(unlistenChunk, unlistenDone, unlistenError);
+      
+      await invoke('refine_user_journey_with_llm_stream', { content: refinedContent || outputContent });
+    } catch (err) {
+      console.error('Journey generation failed:', err);
+      journeyError = String(err);
+      isGeneratingJourney = false;
+      cleanupListeners();
+    }
+  }
+
+  async function handleSaveJourney() {
+    if (!journeyCode) return;
+    try {
+      await saveProjectUserJourney(journeyCode);
+      
+      const indicator = document.createElement('div');
+      indicator.className = 'copy-indicator';
+      indicator.textContent = 'Journey Saved!';
+      document.body.appendChild(indicator);
+      setTimeout(() => indicator.remove(), 1000);
+    } catch (err) {
+      console.error('Failed to save Journey:', err);
+    }
+  }
+
+  async function handleGenerateStories() {
+    if (!outputContent) return;
+    
+    // Reset state
+    isGeneratingStories = true;
+    storiesError = '';
+    cleanupListeners();
+    
+    // Switch to showcase view to see it
+    journeyTab = 'showcase';
+    userStoriesContent = ''; 
+    
+    try {
+      const unlistenChunk = await listen<string>('stories:chunk', (event) => {
+        userStoriesContent += event.payload;
+      });
+      
+      const unlistenDone = await listen('stories:done', () => {
+        isGeneratingStories = false;
+        cleanupListeners();
+        saveProjectUserStories(userStoriesContent);
+      });
+      
+      const unlistenError = await listen<string>('stories:error', (event) => {
+        console.error('Stories stream error:', event.payload);
+        storiesError = event.payload;
+        isGeneratingStories = false;
+        cleanupListeners();
+      });
+      
+      unlistenFunctions.push(unlistenChunk, unlistenDone, unlistenError);
+      
+      await invoke('refine_user_stories_with_llm_stream', { content: refinedContent || outputContent });
+    } catch (err) {
+      console.error('Stories generation failed:', err);
+      storiesError = String(err);
+      isGeneratingStories = false;
+      cleanupListeners();
+    }
+  }
+  
+  async function handleSaveStories() {
+    if (!userStoriesContent) return;
+    try {
+      await saveProjectUserStories(userStoriesContent);
+      
+      const indicator = document.createElement('div');
+      indicator.className = 'copy-indicator';
+      indicator.textContent = 'Stories Saved!';
+      document.body.appendChild(indicator);
+      setTimeout(() => indicator.remove(), 1000);
+    } catch (err) {
+      console.error('Failed to save Stories:', err);
+    }
+  }
+
+  function handleMergedEditorKeydown(e: KeyboardEvent, type: 'er' | 'uml' | 'flowchart' | 'journey') {
     if (e.ctrlKey && e.key.toLowerCase() === 'z') {
       e.preventDefault();
       
@@ -591,9 +768,12 @@
       } else if (type === 'uml') {
         history = umlHistory;
         currentCode = umlCode;
-      } else {
+      } else if (type === 'flowchart') {
         history = flowchartHistory;
         currentCode = flowchartCode;
+      } else {
+        history = journeyHistory;
+        currentCode = journeyCode;
       }
       
       const newState = isRedo ? history.redo(currentCode) : history.undo(currentCode);
@@ -601,15 +781,17 @@
       if (newState !== null) {
         if (type === 'er') erCode = newState;
         else if (type === 'uml') umlCode = newState;
-        else flowchartCode = newState;
+        else if (type === 'flowchart') flowchartCode = newState;
+        else journeyCode = newState;
       }
     }
   }
 
-  function handleEditorBlur(type: 'er' | 'uml' | 'flowchart') {
+  function handleEditorBlur(type: 'er' | 'uml' | 'flowchart' | 'journey') {
     if (type === 'er') erHistory.push(erCode);
     else if (type === 'uml') umlHistory.push(umlCode);
-    else flowchartHistory.push(flowchartCode);
+    else if (type === 'flowchart') flowchartHistory.push(flowchartCode);
+    else journeyHistory.push(journeyCode);
   }
 
   function handleEditorScroll(e: UIEvent) {
@@ -626,6 +808,7 @@
   $: erLineCount = erCode ? erCode.split('\n').length : 1;
   $: umlLineCount = umlCode ? umlCode.split('\n').length : 1;
   $: flowchartLineCount = flowchartCode ? flowchartCode.split('\n').length : 1;
+  $: journeyLineCount = journeyCode ? journeyCode.split('\n').length : 1;
 
   async function handleSaveToHistory() {
     if (!refinedContent) return;
@@ -684,6 +867,12 @@
         on:click={() => switchTab('flowchart')}
       >
         Flowchart
+      </button>
+      <button 
+        class="tab-btn {activeTab === 'journey' ? 'active' : ''}" 
+        on:click={() => switchTab('journey')}
+      >
+        Journey
       </button>
     </div>
     
@@ -1068,6 +1257,138 @@
                   <button class="zoom-btn" on:click={() => handleZoomOut('flowchart')} title="Zoom Out">-</button>
                   <button class="zoom-btn" on:click={() => handleResetView('flowchart')} title="Reset View">Reset</button>
                 </div>
+              </div>
+           {/if}
+        </div>
+      </div>
+
+    
+    {:else if activeTab === 'journey'}
+      <div class="refine-wrapper">
+        <div class="refine-tabs">
+          <button 
+            class="refine-tab-btn {journeyTab === 'editor' ? 'active' : ''}" 
+            on:click={() => switchJourneyTab('editor')}
+          >
+            Editor
+          </button>
+          <button 
+            class="refine-tab-btn {journeyTab === 'render' ? 'active' : ''}" 
+            on:click={() => switchJourneyTab('render')}
+          >
+            Render
+          </button>
+          <button 
+            class="refine-tab-btn {journeyTab === 'showcase' ? 'active' : ''}" 
+            on:click={() => switchJourneyTab('showcase')}
+          >
+            Showcase
+          </button>
+        </div>
+
+        <div class="er-container">
+           {#if journeyTab === 'editor'}
+              <div class="er-editor-container">
+                  <div class="editor-wrapper">
+                    <div class="line-numbers">
+                      {#each Array(journeyLineCount) as _, i}
+                        <span class="line-number">{i + 1}</span>
+                      {/each}
+                    </div>
+                    <textarea 
+                      class="er-editor" 
+                      bind:value={journeyCode}
+                      placeholder="Mermaid Journey code will appear here..."
+                      on:keydown={(e) => handleMergedEditorKeydown(e, 'journey')}
+                      on:blur={() => handleEditorBlur('journey')}
+                      on:input={() => debouncedJourneyPush(journeyCode)}
+                      on:scroll={handleEditorScroll}
+                    ></textarea>
+                  </div>
+                 
+                 <div class="refine-actions">
+                   {#if isGeneratingJourney}
+                     <div class="generating-indicator">
+                        <div class="spinner-small"></div> Generating...
+                     </div>
+                   {:else}
+                    <button class="action-btn secondary" on:click={handleGenerateJourney}>
+                      {journeyCode ? 'Re-generate Journey' : 'Generate Journey'}
+                    </button>
+                    <button class="action-btn primary" on:click={handleSaveJourney} disabled={!journeyCode}>
+                      Save Journey
+                    </button>
+                   {/if}
+                 </div>
+                 {#if journeyError}
+                    <div class="error-msg">{journeyError}</div>
+                 {/if}
+              </div>
+           {:else if journeyTab === 'render'}
+              <div 
+                class="er-render-container" 
+                role="region"
+                aria-label="Journey Map Render View"
+                on:wheel={(e) => handleWheel(e, 'journey')}
+                on:mousedown={(e) => handleMouseDown(e, 'journey')}
+                on:mousemove={(e) => handleMouseMove(e, 'journey')}
+                on:mouseup={() => handleMouseUp('journey')}
+                on:mouseleave={() => handleMouseUp('journey')}
+                style="cursor: {isPanningJourney ? 'grabbing' : 'grab'};"
+              >
+                <div 
+                  class="zoom-container"
+                  style="transform: translate({journeyPanX}px, {journeyPanY}px) scale({journeyZoomScale});"
+                  bind:this={journeyContainer}
+                >
+                  <!-- Mermaid diagram rendered here -->
+                  {#if !journeyCode}
+                    <div class="empty-state-small">
+                       <p>Generate a journey map first.</p>
+                       <button class="action-btn secondary" on:click={handleGenerateJourney}>Generate</button>
+                    </div>
+                  {/if}
+                </div>
+                
+                <div class="zoom-controls">
+                  <button class="zoom-btn" on:click={() => handleZoomIn('journey')} title="Zoom In">+</button>
+                  <button class="zoom-btn" on:click={() => handleZoomOut('journey')} title="Zoom Out">-</button>
+                  <button class="zoom-btn" on:click={() => handleResetView('journey')} title="Reset View">Reset</button>
+                </div>
+              </div>
+           {:else}
+              <!-- Showcase Tab -->
+              <div class="er-editor-container">
+                  <div class="editor-wrapper">
+                    <!-- Simple text area for stories for now, logic similar to others -->
+                     <!-- We don't need line numbers strictly for showcase but consistent looking -->
+                     <!-- Actually showcase implies "Rendered" but stories are text. 
+                          Lets make it an editor/viewer for markdown. -->
+                    <textarea 
+                      class="er-editor" 
+                      bind:value={userStoriesContent}
+                      placeholder="User Stories will appear here..."
+                      style="font-family: sans-serif; line-height: 1.5;"
+                    ></textarea> 
+                  </div>
+                 
+                 <div class="refine-actions">
+                   {#if isGeneratingStories}
+                     <div class="generating-indicator">
+                        <div class="spinner-small"></div> Generating Stories...
+                     </div>
+                   {:else}
+                    <button class="action-btn secondary" on:click={handleGenerateStories}>
+                      {userStoriesContent ? 'Re-generate Stories' : 'Generate Stories'}
+                    </button>
+                    <button class="action-btn primary" on:click={handleSaveStories} disabled={!userStoriesContent}>
+                      Save Stories
+                    </button>
+                   {/if}
+                 </div>
+                 {#if storiesError}
+                    <div class="error-msg">{storiesError}</div>
+                 {/if}
               </div>
            {/if}
         </div>
