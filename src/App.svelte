@@ -7,9 +7,12 @@
   import MainEditor from './components/MainEditor.svelte';
   import HelpModal from './components/HelpModal.svelte';
   import RefineModal from './components/RefineModal.svelte';
+  import DiagramModal from './components/DiagramModal.svelte';
+  import { get } from 'svelte/store';
 
   let showHelpModal = false;
   let showRefineModal = false;
+  let showDiagramModal = false;
   let refineTarget: 'topic' | 'section' | 'merged' | null = null;
   let isLeaderActive = false;
   let leaderTimeout: number | null = null;
@@ -138,6 +141,16 @@
           // Cycle to previous project
           cyclePrevProject();
           break;
+        case '[':
+          // Cycle to previous project
+          cyclePrevProject();
+          break;
+        case 'i':
+          // Open Diagram Modal if selection exists
+          if (get(activeSectionId) || get(activeTopicId)) {
+            showDiagramModal = true;
+          }
+          break;
       }
       
       // Reset leader after command
@@ -157,6 +170,9 @@
       }
       if (showRefineModal) {
         showRefineModal = false;
+      }
+      if (showDiagramModal) {
+        showDiagramModal = false;
       }
     }
   }
@@ -236,6 +252,12 @@
   <RefineModal 
     target={refineTarget}
     onClose={() => showRefineModal = false}
+  />
+{/if}
+
+{#if showDiagramModal}
+  <DiagramModal 
+    onClose={() => showDiagramModal = false}
   />
 {/if}
 
