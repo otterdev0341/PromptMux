@@ -58,6 +58,20 @@ export async function saveProjectRefinement(refinement: Refinement): Promise<voi
   }
 }
 
+export async function deleteProjectRefinement(refinementId: string): Promise<void> {
+  try {
+    const activeProject = get(projectStore);
+    if (!activeProject) throw new Error('No active project');
+
+    await invoke('delete_project_refinement', { projectId: activeProject.id, refinementId });
+    await loadProject();
+  } catch (error) {
+    console.error('Failed to delete project refinement:', error);
+    throw error;
+  }
+}
+
+
 export async function saveProjectErDiagram(erDiagram: string): Promise<void> {
   try {
     await invoke('save_project_er_diagram', { erDiagram });

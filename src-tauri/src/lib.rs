@@ -43,6 +43,7 @@ pub fn run() {
             commands::save_topic_refinement,
             commands::save_section_refinement,
             commands::save_project_refinement,
+            commands::delete_project_refinement,
             commands::save_project_er_diagram,
             commands::refine_er_diagram_with_llm_stream,
             commands::save_project_uml_diagram,

@@ -347,6 +347,35 @@ pub fn save_project_refinement(
 }
 
 #[tauri::command]
+pub fn delete_project_refinement(
+    state: State<AppState>,
+    project_id: String,
+    refinement_id: String,
+) -> Result<(), String> {
+    let mut workspace = state.workspace.lock().unwrap();
+    
+    if let Some(project) = workspace.get_project_mut(&project_id) {
+        let original_len = project.history.len();
+        project.history.retain(|r| r.id != refinement_id);
+        
+        if project.history.len() < original_len {
+            project.updated_at = chrono::Utc::now().to_rfc3339();
+        } else {
+             return Err("Refinement not found".to_string());
+        }
+    } else {
+        return Err("Project not found".to_string());
+    }
+    
+    // Save to file
+    if let Err(e) = save_workspace(&workspace, &state.data_dir) {
+        return Err(format!("Failed to save workspace: {}", e));
+    }
+    
+    Ok(())
+}
+
+#[tauri::command]
 pub fn save_project_er_diagram(
     state: State<AppState>,
     er_diagram: String,

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { mergedOutput, projectStore, saveProjectRefinement, saveProjectErDiagram, saveProjectUmlDiagram, saveProjectFlowchart, saveProjectUserJourney, saveProjectUserStories } from '../stores/projectStore';
+  import { mergedOutput, projectStore, saveProjectRefinement, deleteProjectRefinement, saveProjectErDiagram, saveProjectUmlDiagram, saveProjectFlowchart, saveProjectUserJourney, saveProjectUserStories } from '../stores/projectStore';
   import type { Refinement } from '../stores/projectStore';
   import { invoke } from '@tauri-apps/api/core';
   import { listen } from '@tauri-apps/api/event';
@@ -636,6 +636,20 @@
     return new Date(isoString).toLocaleString();
   }
 
+  async function handleDeleteHistoryItem(id: string) {
+    if (!confirm('Are you sure you want to delete this refinement?')) return;
+    try {
+      await deleteProjectRefinement(id);
+    } catch (error) {
+      console.error('Failed to delete refinement:', error);
+    }
+  }
+
+  function handleLoadHistoryItem(content: string) {
+    refinedContent = content;
+    refineTab = 'generate';
+  }
+
   function handleRestore(content: string) {
     // For merged output, "restore" mostly means copy to clipboard since we can't edit the source directly from here
     copyToClipboard(content);
@@ -945,7 +959,7 @@
                  <button class="action-btn" on:click={handleRefine}>Retry</button>
                </div>
             {:else if refinedContent}
-               <pre class="output-content refined">{refinedContent}</pre>
+               <textarea class="output-content refined" bind:value={refinedContent}></textarea>
                <div class="refine-actions">
                  <button class="action-btn secondary" on:click={handleRefine}>Re-generate</button>
                  <button class="action-btn primary" on:click={handleSaveToHistory}>Save to History</button>
@@ -971,12 +985,31 @@
             {#if $projectStore && $projectStore.history && $projectStore.history.length > 0}
               <div class="history-list">
                 {#each [...$projectStore.history].reverse() as item}
-                  <div class="history-item">
+                  <div 
+                    class="history-item clickable"
+                    role="button"
+                    tabindex="0"
+                    on:click={() => handleLoadHistoryItem(item.refined_content)}
+                    on:keydown={(e) => e.key === 'Enter' && handleLoadHistoryItem(item.refined_content)}
+                  >
                     <div class="history-meta">
                       <span class="history-time">{formatDate(item.timestamp)}</span>
-                      <button class="restore-btn" on:click={() => handleRestore(item.refined_content)}>
-                        📋 Copy to Clipboard
-                      </button>
+                      <div class="history-actions">
+                        <button 
+                          class="restore-btn" 
+                          on:click|stopPropagation={() => handleRestore(item.refined_content)}
+                          title="Copy to Clipboard"
+                        >
+                          📋
+                        </button>
+                        <button 
+                          class="restore-btn delete" 
+                          on:click|stopPropagation={() => handleDeleteHistoryItem(item.id)}
+                          title="Delete"
+                        >
+                          🗑️
+                        </button>
+                      </div>
                     </div>
                     <div class="history-content-preview">
                       <pre>{item.refined_content}</pre>
@@ -1471,6 +1504,8 @@
     word-wrap: break-word;
     margin: 0;
     outline: none;
+    resize: none;
+    border: none;
   }
 
   .refine-container {
@@ -1616,6 +1651,16 @@
     border: 1px solid #2d3748;
     border-radius: 0.5rem;
     overflow: hidden;
+    transition: all 0.2s;
+  }
+  
+  .history-item.clickable {
+    cursor: pointer;
+  }
+
+  .history-item.clickable:hover {
+    border-color: #4a5568;
+    background-color: #262c3a;
   }
 
   .history-meta {
@@ -1627,6 +1672,12 @@
     border-bottom: 1px solid #4a5568;
   }
 
+  .history-actions {
+    display: flex;
+    gap: 0.5rem;
+  }
+
+  
   .history-time {
     color: #a0aec0;
     font-size: 0.875rem;
@@ -1634,18 +1685,22 @@
 
   .restore-btn {
     background: none;
-    border: 1px solid #4a5568;
-    color: #e2e8f0;
-    padding: 0.25rem 0.75rem;
-    border-radius: 0.25rem;
-    font-size: 0.75rem;
+    border: none;
     cursor: pointer;
-    transition: all 0.2s;
+    font-size: 1rem;
+    padding: 0.25rem;
+    border-radius: 0.25rem;
+    transition: background-color 0.2s;
   }
 
   .restore-btn:hover {
     background-color: #4a5568;
   }
+  
+  .restore-btn.delete:hover {
+    background-color: #c53030;
+  }
+
 
   .history-content-preview {
     padding: 1rem;
