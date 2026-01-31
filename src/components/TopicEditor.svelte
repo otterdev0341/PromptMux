@@ -4,6 +4,7 @@
   import { activeTopic, updateTopicContent, activeTopicId, projectStore, workspaceStore } from '../stores/projectStore';
   import type { Refinement } from '../stores/projectStore';
   import { debounce } from '../utils/debounce';
+  import { UndoHistory } from '../utils/UndoHistory';
 
   const dispatch = createEventDispatcher();
 
@@ -16,6 +17,12 @@
   let hasUnsavedChanges = false;
   let isProgrammaticFocus = false; // Track programmatic focus to prevent click toggle
   let activeTab: 'edit' | 'history' = 'edit';
+  
+  const history = new UndoHistory<string>();
+  
+  const debouncedHistoryPush = debounce((content: string) => {
+    history.push(content);
+  }, 1000); // Snapshot every 1 second of inactivity
 
   let lastTopicId: string | null = null;
 
@@ -29,6 +36,8 @@
       isViewMode = true;
       hasUnsavedChanges = false;
       lastTopicId = $activeTopic.id;
+      history.clear(); // Clear undo history for new topic
+      history.push(editorContent); // Push initial state
       
       // Auto-focus when topic changes, but keep view mode
       tick().then(() => {
@@ -112,6 +121,7 @@
       });
       
       debouncedSave($activeTopicId, editorContent);
+      debouncedHistoryPush(editorContent);
     }
   }
 
@@ -153,6 +163,17 @@
       e.preventDefault();
       dispatch('refineTopic');
     }
+    // Ctrl+z - Undo
+    else if (e.ctrlKey && e.key.toLowerCase() === 'z') {
+      e.preventDefault();
+      if (e.shiftKey) { // Redo
+         const next = history.redo(editorContent);
+         if (next !== null) editorContent = next;
+      } else { // Undo
+         const prev = history.undo(editorContent);
+         if (prev !== null) editorContent = prev;
+      }
+    }
   }
 
   function handleFocus() {
@@ -182,6 +203,19 @@
 
   function formatDate(isoString: string) {
     return new Date(isoString).toLocaleString();
+  }
+
+  $: lineCount = editorContent ? editorContent.split('\n').length : 1;
+
+  function handleEditorScroll(e: UIEvent) {
+    const textarea = e.target as HTMLTextAreaElement;
+    const wrapper = textarea.parentElement;
+    if (wrapper) {
+      const lineNumbers = wrapper.querySelector('.line-numbers');
+      if (lineNumbers) {
+        lineNumbers.scrollTop = textarea.scrollTop;
+      }
+    }
   }
 </script>
 
@@ -248,6 +282,11 @@
     
     <div class="editor-wrapper">
       {#if activeTab === 'edit'}
+        <div class="line-numbers">
+          {#each Array(lineCount) as _, i}
+            <span class="line-number">{i + 1}</span>
+          {/each}
+        </div>
         <!-- Always render the textarea, just change its state -->
         <textarea
           bind:this={textareaElement}
@@ -259,6 +298,7 @@
           on:keydown={handleKeydown}
           on:focus={handleFocus}
           on:blur={handleBlur}
+          on:scroll={handleEditorScroll}
           on:click={() => {
             console.log('Textarea clicked!');
             // Only auto-switch if we're in view mode AND not handling programmatic focus
@@ -332,8 +372,28 @@
     position: relative;
     flex: 1;
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
     overflow: hidden;
+  }
+  
+  .line-numbers {
+    padding: 1.5rem 0.5rem 1.5rem 0;
+    text-align: right;
+    background-color: #0d1117;
+    color: #4a5568;
+    border-right: 1px solid #2d3748;
+    font-family: 'Fira Code', 'Monaco', 'Consolas', monospace;
+    font-size: 0.875rem;
+    line-height: 1.6;
+    user-select: none;
+    min-width: 2.5rem;
+    overflow: hidden;
+  }
+  
+  .line-number {
+    display: block;
+    padding-right: 0.5rem;
+    color: #4a5568;
   }
 
   .editor-header {

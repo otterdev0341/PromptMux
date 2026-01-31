@@ -91,6 +91,7 @@ pub struct Project {
     pub history: Vec<Refinement>,
     pub er_diagram: Option<String>,
     pub uml_diagram: Option<String>,
+    pub flowchart: Option<String>,
 }
 
 impl Project {
@@ -105,6 +106,7 @@ impl Project {
             history: Vec::new(),
             er_diagram: None,
             uml_diagram: None,
+            flowchart: None,
         }
     }
 

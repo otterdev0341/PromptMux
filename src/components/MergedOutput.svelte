@@ -1,17 +1,20 @@
 <script lang="ts">
-  import { mergedOutput, projectStore, saveProjectRefinement, saveProjectErDiagram, saveProjectUmlDiagram } from '../stores/projectStore';
+  import { mergedOutput, projectStore, saveProjectRefinement, saveProjectErDiagram, saveProjectUmlDiagram, saveProjectFlowchart } from '../stores/projectStore';
   import type { Refinement } from '../stores/projectStore';
   import { invoke } from '@tauri-apps/api/core';
   import { listen } from '@tauri-apps/api/event';
-  import { onDestroy, onMount } from 'svelte';
+  import { onDestroy, onMount, tick } from 'svelte';
   import mermaid from 'mermaid';
+  import { UndoHistory } from '../utils/UndoHistory';
+  import { debounce } from '../utils/debounce';
 
   let outputContent = '';
   let refinedContent = '';
-  let activeTab: 'raw' | 'refine' | 'er' | 'uml' = 'raw';
+  let activeTab: 'raw' | 'refine' | 'er' | 'uml' | 'flowchart' = 'raw';
   let refineTab: 'generate' | 'history' = 'generate';
   let erTab: 'editor' | 'render' = 'render';
   let umlTab: 'editor' | 'render' = 'render';
+  let flowchartTab: 'editor' | 'render' = 'render';
   let isRefining = false;
   let refineError = '';
   let focused = false;
@@ -43,8 +46,30 @@
   let umlStartX = 0;
   let umlStartY = 0;
   
+  // Flowchart State
+  let flowchartCode = '';
+  let isGeneratingFlowchart = false;
+  let flowchartError = '';
+  let flowchartContainer: HTMLElement;
+  
+  let flowchartZoomScale = 1;
+  let flowchartPanX = 0;
+  let flowchartPanY = 0;
+  let isPanningFlowchart = false;
+  let flowchartStartX = 0;
+  let flowchartStartY = 0;
+  
   // Track listeners to clean up
   let unlistenFunctions: (() => void)[] = [];
+
+  // Undo History
+  const erHistory = new UndoHistory<string>();
+  const umlHistory = new UndoHistory<string>();
+  const flowchartHistory = new UndoHistory<string>();
+
+  const debouncedErPush = debounce((code: string) => erHistory.push(code), 1000);
+  const debouncedUmlPush = debounce((code: string) => umlHistory.push(code), 1000);
+  const debouncedFlowchartPush = debounce((code: string) => flowchartHistory.push(code), 1000);
 
   $: outputContent = $mergedOutput;
 
@@ -68,16 +93,31 @@
       if ($projectStore.uml_diagram) {
         umlCode = $projectStore.uml_diagram;
       }
+      if ($projectStore.flowchart) {
+        flowchartCode = $projectStore.flowchart;
+      }
     }
   });
 
-  // Watch for project updates
+  let lastProjectId: string | null = null;
+
+  // Watch for project updates - only sync when switching projects
   $: if ($projectStore) {
-    if ($projectStore.er_diagram && !erCode) {
-      erCode = $projectStore.er_diagram;
-    }
-    if ($projectStore.uml_diagram && !umlCode) {
-      umlCode = $projectStore.uml_diagram;
+    if ($projectStore.id !== lastProjectId) {
+      lastProjectId = $projectStore.id;
+      erCode = $projectStore.er_diagram || '';
+      umlCode = $projectStore.uml_diagram || '';
+      flowchartCode = $projectStore.flowchart || '';
+      
+      // Initialize Undo History
+      erHistory.clear();
+      erHistory.push(erCode);
+      
+      umlHistory.clear();
+      umlHistory.push(umlCode);
+      
+      flowchartHistory.clear();
+      flowchartHistory.push(flowchartCode);
     }
   }
 
@@ -94,12 +134,14 @@
     focused = false;
   }
   
-  function switchTab(tab: 'raw' | 'refine' | 'er' | 'uml') {
+  function switchTab(tab: 'raw' | 'refine' | 'er' | 'uml' | 'flowchart') {
     activeTab = tab;
     if (tab === 'er' && erTab === 'render') {
-      setTimeout(renderDiagram, 100);
+      tick().then(() => renderDiagram('er'));
     } else if (tab === 'uml' && umlTab === 'render') {
-      setTimeout(renderUmlDiagram, 100);
+      tick().then(() => renderDiagram('uml'));
+    } else if (tab === 'flowchart' && flowchartTab === 'render') {
+      tick().then(() => renderDiagram('flowchart'));
     }
   }
 
@@ -110,75 +152,234 @@
   function switchErTab(tab: 'editor' | 'render') {
     erTab = tab;
     if (tab === 'render') {
-      setTimeout(renderDiagram, 100);
+      tick().then(() => renderDiagram('er'));
     }
   }
 
   function switchUmlTab(tab: 'editor' | 'render') {
     umlTab = tab;
     if (tab === 'render') {
-      setTimeout(renderUmlDiagram, 100);
+      tick().then(() => renderDiagram('uml'));
+    }
+  }
+
+  function switchFlowchartTab(tab: 'editor' | 'render') {
+    flowchartTab = tab;
+    if (tab === 'render') {
+      tick().then(() => renderDiagram('flowchart'));
     }
   }
   
   // Zoom Handler
-  function handleWheel(e: WheelEvent) {
-    if (erTab !== 'render') return;
+  function handleWheel(e: WheelEvent, type: 'er' | 'uml' | 'flowchart') {
+    if ((type === 'er' && erTab !== 'render') || 
+        (type === 'uml' && umlTab !== 'render') ||
+        (type === 'flowchart' && flowchartTab !== 'render')) return;
     e.preventDefault();
     
     const delta = e.deltaY > 0 ? 0.9 : 1.1;
-    const newScale = Math.max(0.1, Math.min(5, zoomScale * delta));
-    zoomScale = newScale;
+    if (type === 'er') {
+      zoomScale = Math.max(0.1, Math.min(5, zoomScale * delta));
+    } else if (type === 'uml') {
+      umlZoomScale = Math.max(0.1, Math.min(5, umlZoomScale * delta));
+    } else {
+      flowchartZoomScale = Math.max(0.1, Math.min(5, flowchartZoomScale * delta));
+    }
   }
   
   // Pan Handlers
-  function handleMouseDown(e: MouseEvent) {
-    if (erTab !== 'render') return;
-    isPanning = true;
-    startX = e.clientX - panX;
-    startY = e.clientY - panY;
-  }
-  
-  function handleMouseMove(e: MouseEvent) {
-    if (!isPanning) return;
-    e.preventDefault();
-    panX = e.clientX - startX;
-    panY = e.clientY - startY;
-  }
-  
-  function handleMouseUp() {
-    isPanning = false;
-  }
-  
-  function handleResetView() {
-    zoomScale = 1;
-    panX = 0;
-    panY = 0;
-  }
-
-  function handleZoomIn() {
-    zoomScale = Math.min(5, zoomScale * 1.2);
-  }
-
-  function handleZoomOut() {
-    zoomScale = Math.max(0.1, zoomScale * 0.8);
-  }
-
-  async function renderDiagram() {
-    if (!erCode || !mermaidContainer) return;
+  function handleMouseDown(e: MouseEvent, type: 'er' | 'uml' | 'flowchart') {
+    if ((type === 'er' && erTab !== 'render') || 
+        (type === 'uml' && umlTab !== 'render') ||
+        (type === 'flowchart' && flowchartTab !== 'render')) return;
     
-    // Reset view when re-rendering
-    handleResetView();
-    
-    try {
-      mermaidContainer.innerHTML = '';
-      const { svg } = await mermaid.render('mermaid-svg-' + Date.now(), erCode);
-      mermaidContainer.innerHTML = svg;
-    } catch (error) {
-      console.error('Mermaid render error:', error);
-      mermaidContainer.innerHTML = `<div class="error-msg">Failed to render diagram: ${error}</div>`;
+    if (type === 'er') {
+      isPanning = true;
+      startX = e.clientX - panX;
+      startY = e.clientY - panY;
+    } else if (type === 'uml') {
+      isPanningUml = true;
+      umlStartX = e.clientX - umlPanX;
+      umlStartY = e.clientY - umlPanY;
+    } else {
+      isPanningFlowchart = true;
+      flowchartStartX = e.clientX - flowchartPanX;
+      flowchartStartY = e.clientY - flowchartPanY;
     }
   }
+  
+  function handleMouseMove(e: MouseEvent, type: 'er' | 'uml' | 'flowchart') {
+    e.preventDefault();
+    if (type === 'er') {
+       if (!isPanning) return;
+       panX = e.clientX - startX;
+       panY = e.clientY - startY;
+    } else if (type === 'uml') {
+       if (!isPanningUml) return;
+       umlPanX = e.clientX - umlStartX;
+       umlPanY = e.clientY - umlStartY;
+    } else {
+       if (!isPanningFlowchart) return;
+       flowchartPanX = e.clientX - flowchartStartX;
+       flowchartPanY = e.clientY - flowchartStartY;
+    }
+  }
+  
+  function handleMouseUp(type: 'er' | 'uml' | 'flowchart') {
+    if (type === 'er') {
+      isPanning = false;
+    } else if (type === 'uml') {
+      isPanningUml = false;
+    } else {
+      isPanningFlowchart = false;
+    }
+  }
+  
+  function handleResetView(type: 'er' | 'uml' | 'flowchart') {
+    if (type === 'er') {
+      zoomScale = 1;
+      panX = 0;
+      panY = 0;
+    } else if (type === 'uml') {
+      umlZoomScale = 1;
+      umlPanX = 0;
+      umlPanY = 0;
+    } else {
+      flowchartZoomScale = 1;
+      flowchartPanX = 0;
+      flowchartPanY = 0;
+    }
+  }
+
+  function handleZoomIn(type: 'er' | 'uml' | 'flowchart') {
+    if (type === 'er') {
+      zoomScale = Math.min(5, zoomScale * 1.2);
+    } else if (type === 'uml') {
+      umlZoomScale = Math.min(5, umlZoomScale * 1.2);
+    } else {
+      flowchartZoomScale = Math.min(5, flowchartZoomScale * 1.2);
+    }
+  }
+
+  function handleZoomOut(type: 'er' | 'uml' | 'flowchart') {
+     if (type === 'er') {
+      zoomScale = Math.max(0.1, zoomScale * 0.8);
+    } else if (type === 'uml') {
+      umlZoomScale = Math.max(0.1, umlZoomScale * 0.8);
+    } else {
+      flowchartZoomScale = Math.max(0.1, flowchartZoomScale * 0.8);
+    }
+  }
+
+  function cleanMermaidCode(code: string): string {
+    // 1. Remove markdown code blocks globally
+    let clean = code
+      .replace(/```mermaid/gi, '')
+      .replace(/```/g, '')
+      .trim();
+
+    // 2. Fix concatenation issues where newline is missing
+    // Case A: ";graph" or "];graph" -> "];\n\ngraph"
+    clean = clean.replace(/([;\]\}\)])\s*(graph|flowchart)(\s|;)/gi, '$1\n\n$2$3');
+    
+    // Case B: "wordgraph TD" (hallucination/typo) -> "word\n\ngraph TD"
+    // Matches alphanumeric char, then graph/flowchart, then direction (TD, LR, etc.)
+    clean = clean.replace(/([a-z0-9])(graph|flowchart)\s+(TD|TB|BT|RL|LR)/gi, '$1\n\n$2 $3');
+    
+    // 3. Keep only the first valid diagram block
+    // Split by newline followed by graph/flowchart keyword
+    const parts = clean.split(/\n\s*(?=graph\s|flowchart\s)/i);
+    
+    if (parts.length > 0) {
+      for (const part of parts) {
+        const trimmed = part.trim();
+        if (/^(graph|flowchart)\s/i.test(trimmed)) {
+          return trimmed;
+        }
+      }
+      // Fallback
+      if (parts[0].trim().length > 0) return parts[0].trim();
+    }
+    
+    return clean;
+  }
+
+  async function renderDiagram(type: 'er' | 'uml' | 'flowchart') {
+    let code = '';
+    let container: HTMLElement | undefined;
+    
+    if (type === 'er') {
+        code = erCode;
+        container = mermaidContainer;
+    } else if (type === 'uml') {
+        code = umlCode;
+        container = umlContainer;
+    } else {
+        code = flowchartCode;
+        container = flowchartContainer;
+    }
+    
+    if (!code || !container) return;
+    
+    // Clean the code
+    code = cleanMermaidCode(code);
+    
+    // Reset view when re-rendering
+    handleResetView(type);
+    
+    try {
+      container.innerHTML = '';
+      const { svg } = await mermaid.render('mermaid-svg-' + type + '-' + Date.now(), code);
+      container.innerHTML = svg;
+    } catch (error) {
+      console.error(`Mermaid ${type} render error:`, error);
+      container.innerHTML = `<div class="error-msg">Failed to render diagram: ${error}</div>`;
+    }
+  }
+
+  async function handleGenerateUml() {
+    if (!outputContent) return;
+    
+    // Reset state
+    isGeneratingUml = true;
+    umlError = '';
+    cleanupListeners();
+    
+    // Switch to editor view
+    umlTab = 'editor';
+    umlHistory.push(umlCode); // Checkpoint
+    umlCode = ''; 
+    
+    try {
+      const unlistenChunk = await listen<string>('uml:chunk', (event) => {
+        umlCode += event.payload;
+      });
+      
+      const unlistenDone = await listen('uml:done', () => {
+        isGeneratingUml = false;
+        cleanupListeners();
+        saveProjectUmlDiagram(umlCode);
+      });
+      
+      const unlistenError = await listen<string>('uml:error', (event) => {
+        console.error('UML stream error:', event.payload);
+        umlError = event.payload;
+        isGeneratingUml = false;
+        cleanupListeners();
+      });
+      
+      unlistenFunctions.push(unlistenChunk, unlistenDone, unlistenError);
+      
+      await invoke('refine_uml_diagram_with_llm_stream', { content: refinedContent || outputContent });
+    } catch (err) {
+      console.error('UML generation failed:', err);
+      umlError = String(err);
+      isGeneratingUml = false;
+      cleanupListeners();
+    }
+  }
+
+
 
   async function handleGenerateEr() {
     if (!outputContent) return;
@@ -190,7 +391,8 @@
     
     // Switch to editor view to see it streaming in
     erTab = 'editor';
-    erCode = ''; 
+    erHistory.push(erCode); // Checkpoint
+    erCode = '';  
     
     try {
       const unlistenChunk = await listen<string>('er:chunk', (event) => {
@@ -237,105 +439,9 @@
     }
   }
 
-  // UML Handlers
 
-  function handleUmlWheel(e: WheelEvent) {
-    if (umlTab !== 'render') return;
-    e.preventDefault();
-    
-    const delta = e.deltaY > 0 ? 0.9 : 1.1;
-    const newScale = Math.max(0.1, Math.min(5, umlZoomScale * delta));
-    umlZoomScale = newScale;
-  }
-  
-  function handleUmlMouseDown(e: MouseEvent) {
-    if (umlTab !== 'render') return;
-    isPanningUml = true;
-    umlStartX = e.clientX - umlPanX;
-    umlStartY = e.clientY - umlPanY;
-  }
-  
-  function handleUmlMouseMove(e: MouseEvent) {
-    if (!isPanningUml) return;
-    e.preventDefault();
-    umlPanX = e.clientX - umlStartX;
-    umlPanY = e.clientY - umlStartY;
-  }
-  
-  function handleUmlMouseUp() {
-    isPanningUml = false;
-  }
-  
-  function handleUmlResetView() {
-    umlZoomScale = 1;
-    umlPanX = 0;
-    umlPanY = 0;
-  }
 
-  function handleUmlZoomIn() {
-    umlZoomScale = Math.min(5, umlZoomScale * 1.2);
-  }
 
-  function handleUmlZoomOut() {
-    umlZoomScale = Math.max(0.1, umlZoomScale * 0.8);
-  }
-
-  async function renderUmlDiagram() {
-    if (!umlCode || !umlContainer) return;
-    
-    // Reset view when re-rendering
-    handleUmlResetView();
-    
-    try {
-      umlContainer.innerHTML = '';
-      const { svg } = await mermaid.render('mermaid-uml-svg-' + Date.now(), umlCode);
-      umlContainer.innerHTML = svg;
-    } catch (error) {
-      console.error('Mermaid render error:', error);
-      umlContainer.innerHTML = `<div class="error-msg">Failed to render diagram: ${error}</div>`;
-    }
-  }
-
-  async function handleGenerateUml() {
-    if (!outputContent) return;
-    
-    // Reset state
-    isGeneratingUml = true;
-    umlError = '';
-    cleanupListeners();
-    
-    // Switch to editor view to see it streaming in
-    umlTab = 'editor';
-    umlCode = ''; 
-    
-    try {
-      const unlistenChunk = await listen<string>('uml:chunk', (event) => {
-        umlCode += event.payload;
-      });
-      
-      const unlistenDone = await listen('uml:done', () => {
-        isGeneratingUml = false;
-        cleanupListeners();
-        saveProjectUmlDiagram(umlCode);
-      });
-      
-      const unlistenError = await listen<string>('uml:error', (event) => {
-        console.error('UML stream error:', event.payload);
-        umlError = event.payload;
-        isGeneratingUml = false;
-        cleanupListeners();
-      });
-      
-      unlistenFunctions.push(unlistenChunk, unlistenDone, unlistenError);
-      
-      await invoke('refine_uml_diagram_with_llm_stream', { content: refinedContent || outputContent });
-    } catch (err) {
-      console.error('UML generation failed:', err);
-      umlError = String(err);
-      isGeneratingUml = false;
-      cleanupListeners();
-    }
-  }
 
   async function handleSaveUml() {
     if (!umlCode) return;
@@ -350,6 +456,63 @@
       setTimeout(() => indicator.remove(), 1000);
     } catch (err) {
       console.error('Failed to save UML diagram:', err);
+    }
+  }
+
+  async function handleGenerateFlowchart() {
+    if (!outputContent) return;
+    
+    // Reset state
+    isGeneratingFlowchart = true;
+    flowchartError = '';
+    cleanupListeners();
+    
+    // Switch to editor view
+    flowchartTab = 'editor';
+    flowchartHistory.push(flowchartCode); // Checkpoint
+    flowchartCode = ''; 
+    
+    try {
+      const unlistenChunk = await listen<string>('flowchart:chunk', (event) => {
+        flowchartCode += event.payload;
+      });
+      
+      const unlistenDone = await listen('flowchart:done', () => {
+        isGeneratingFlowchart = false;
+        cleanupListeners();
+        saveProjectFlowchart(flowchartCode);
+      });
+      
+      const unlistenError = await listen<string>('flowchart:error', (event) => {
+        console.error('Flowchart stream error:', event.payload);
+        flowchartError = event.payload;
+        isGeneratingFlowchart = false;
+        cleanupListeners();
+      });
+      
+      unlistenFunctions.push(unlistenChunk, unlistenDone, unlistenError);
+      
+      await invoke('refine_flowchart_with_llm_stream', { content: refinedContent || outputContent });
+    } catch (err) {
+      console.error('Flowchart generation failed:', err);
+      flowchartError = String(err);
+      isGeneratingFlowchart = false;
+      cleanupListeners();
+    }
+  }
+
+  async function handleSaveFlowchart() {
+    if (!flowchartCode) return;
+    try {
+      await saveProjectFlowchart(flowchartCode);
+      
+      const indicator = document.createElement('div');
+      indicator.className = 'copy-indicator';
+      indicator.textContent = 'Flowchart Saved!';
+      document.body.appendChild(indicator);
+      setTimeout(() => indicator.remove(), 1000);
+    } catch (err) {
+      console.error('Failed to save Flowchart:', err);
     }
   }
 
@@ -414,6 +577,56 @@
     copyToClipboard(content);
   }
 
+  function handleMergedEditorKeydown(e: KeyboardEvent, type: 'er' | 'uml' | 'flowchart') {
+    if (e.ctrlKey && e.key.toLowerCase() === 'z') {
+      e.preventDefault();
+      
+      const isRedo = e.shiftKey;
+      let history: UndoHistory<string>;
+      let currentCode: string;
+      
+      if (type === 'er') {
+        history = erHistory;
+        currentCode = erCode;
+      } else if (type === 'uml') {
+        history = umlHistory;
+        currentCode = umlCode;
+      } else {
+        history = flowchartHistory;
+        currentCode = flowchartCode;
+      }
+      
+      const newState = isRedo ? history.redo(currentCode) : history.undo(currentCode);
+      
+      if (newState !== null) {
+        if (type === 'er') erCode = newState;
+        else if (type === 'uml') umlCode = newState;
+        else flowchartCode = newState;
+      }
+    }
+  }
+
+  function handleEditorBlur(type: 'er' | 'uml' | 'flowchart') {
+    if (type === 'er') erHistory.push(erCode);
+    else if (type === 'uml') umlHistory.push(umlCode);
+    else flowchartHistory.push(flowchartCode);
+  }
+
+  function handleEditorScroll(e: UIEvent) {
+    const textarea = e.target as HTMLTextAreaElement;
+    const wrapper = textarea.parentElement;
+    if (wrapper) {
+      const lineNumbers = wrapper.querySelector('.line-numbers');
+      if (lineNumbers) {
+        lineNumbers.scrollTop = textarea.scrollTop;
+      }
+    }
+  }
+
+  $: erLineCount = erCode ? erCode.split('\n').length : 1;
+  $: umlLineCount = umlCode ? umlCode.split('\n').length : 1;
+  $: flowchartLineCount = flowchartCode ? flowchartCode.split('\n').length : 1;
+
   async function handleSaveToHistory() {
     if (!refinedContent) return;
     
@@ -466,6 +679,12 @@
       >
         UML Diagram
       </button>
+      <button 
+        class="tab-btn {activeTab === 'flowchart' ? 'active' : ''}" 
+        on:click={() => switchTab('flowchart')}
+      >
+        Flowchart
+      </button>
     </div>
     
     <div class="header-actions">
@@ -484,6 +703,10 @@
         </button>
       {:else if umlCode && activeTab === 'uml'}
         <button class="copy-button" on:click={() => copyToClipboard(umlCode)}>
+          📋 Copy Code
+        </button>
+      {:else if flowchartCode && activeTab === 'flowchart'}
+        <button class="copy-button" on:click={() => copyToClipboard(flowchartCode)}>
           📋 Copy Code
         </button>
       {/if}
@@ -602,11 +825,22 @@
         <div class="er-container">
            {#if erTab === 'editor'}
               <div class="er-editor-container">
-                 <textarea 
-                   class="er-editor" 
-                   bind:value={erCode}
-                   placeholder="Mermaid ER diagram code will appear here..."
-                 ></textarea>
+                  <div class="editor-wrapper">
+                    <div class="line-numbers">
+                      {#each Array(erLineCount) as _, i}
+                        <span class="line-number">{i + 1}</span>
+                      {/each}
+                    </div>
+                    <textarea 
+                      class="er-editor" 
+                      bind:value={erCode}
+                      placeholder="Mermaid ER diagram code will appear here..."
+                      on:keydown={(e) => handleMergedEditorKeydown(e, 'er')}
+                      on:blur={() => handleEditorBlur('er')}
+                      on:input={() => debouncedErPush(erCode)}
+                      on:scroll={handleEditorScroll}
+                    ></textarea>
+                  </div>
                  
                  <div class="refine-actions">
                    {#if isGeneratingEr}
@@ -631,11 +865,11 @@
                 class="er-render-container" 
                 role="region"
                 aria-label="ER Diagram Render View"
-                on:wheel={handleWheel}
-                on:mousedown={handleMouseDown}
-                on:mousemove={handleMouseMove}
-                on:mouseup={handleMouseUp}
-                on:mouseleave={handleMouseUp}
+                on:wheel={(e) => handleWheel(e, 'er')}
+                on:mousedown={(e) => handleMouseDown(e, 'er')}
+                on:mousemove={(e) => handleMouseMove(e, 'er')}
+                on:mouseup={() => handleMouseUp('er')}
+                on:mouseleave={() => handleMouseUp('er')}
                 style="cursor: {isPanning ? 'grabbing' : 'grab'};"
               >
                 <div 
@@ -652,9 +886,9 @@
                 </div>
                 
                 <div class="zoom-controls">
-                  <button class="zoom-btn" on:click={handleZoomIn} title="Zoom In">+</button>
-                  <button class="zoom-btn" on:click={handleZoomOut} title="Zoom Out">-</button>
-                  <button class="zoom-btn" on:click={handleResetView} title="Reset View">Reset</button>
+                  <button class="zoom-btn" on:click={() => handleZoomIn('er')} title="Zoom In">+</button>
+                  <button class="zoom-btn" on:click={() => handleZoomOut('er')} title="Zoom Out">-</button>
+                  <button class="zoom-btn" on:click={() => handleResetView('er')} title="Reset View">Reset</button>
                 </div>
               </div>
            {/if}
@@ -680,11 +914,22 @@
         <div class="er-container">
            {#if umlTab === 'editor'}
               <div class="er-editor-container">
-                 <textarea 
-                   class="er-editor" 
-                   bind:value={umlCode}
-                   placeholder="Mermaid Class diagram code will appear here..."
-                 ></textarea>
+                  <div class="editor-wrapper">
+                    <div class="line-numbers">
+                      {#each Array(umlLineCount) as _, i}
+                        <span class="line-number">{i + 1}</span>
+                      {/each}
+                    </div>
+                    <textarea 
+                      class="er-editor" 
+                      bind:value={umlCode}
+                      placeholder="Mermaid Class diagram code will appear here..."
+                      on:keydown={(e) => handleMergedEditorKeydown(e, 'uml')}
+                      on:blur={() => handleEditorBlur('uml')}
+                      on:input={() => debouncedUmlPush(umlCode)}
+                      on:scroll={handleEditorScroll}
+                    ></textarea>
+                  </div>
                  
                  <div class="refine-actions">
                    {#if isGeneratingUml}
@@ -709,11 +954,11 @@
                 class="er-render-container" 
                 role="region"
                 aria-label="UML Diagram Render View"
-                on:wheel={handleUmlWheel}
-                on:mousedown={handleUmlMouseDown}
-                on:mousemove={handleUmlMouseMove}
-                on:mouseup={handleUmlMouseUp}
-                on:mouseleave={handleUmlMouseUp}
+                on:wheel={(e) => handleWheel(e, 'uml')}
+                on:mousedown={(e) => handleMouseDown(e, 'uml')}
+                on:mousemove={(e) => handleMouseMove(e, 'uml')}
+                on:mouseup={() => handleMouseUp('uml')}
+                on:mouseleave={() => handleMouseUp('uml')}
                 style="cursor: {isPanningUml ? 'grabbing' : 'grab'};"
               >
                 <div 
@@ -730,9 +975,98 @@
                 </div>
                 
                 <div class="zoom-controls">
-                  <button class="zoom-btn" on:click={handleUmlZoomIn} title="Zoom In">+</button>
-                  <button class="zoom-btn" on:click={handleUmlZoomOut} title="Zoom Out">-</button>
-                  <button class="zoom-btn" on:click={handleUmlResetView} title="Reset View">Reset</button>
+                  <button class="zoom-btn" on:click={() => handleZoomIn('uml')} title="Zoom In">+</button>
+                  <button class="zoom-btn" on:click={() => handleZoomOut('uml')} title="Zoom Out">-</button>
+                  <button class="zoom-btn" on:click={() => handleResetView('uml')} title="Reset View">Reset</button>
+                </div>
+              </div>
+           {/if}
+        </div>
+      </div>
+    {:else if activeTab === 'flowchart'}
+      <div class="refine-wrapper">
+        <div class="refine-tabs">
+          <button 
+            class="refine-tab-btn {flowchartTab === 'editor' ? 'active' : ''}" 
+            on:click={() => switchFlowchartTab('editor')}
+          >
+            Editor
+          </button>
+          <button 
+            class="refine-tab-btn {flowchartTab === 'render' ? 'active' : ''}" 
+            on:click={() => switchFlowchartTab('render')}
+          >
+            Render
+          </button>
+        </div>
+
+        <div class="er-container">
+           {#if flowchartTab === 'editor'}
+              <div class="er-editor-container">
+                  <div class="editor-wrapper">
+                    <div class="line-numbers">
+                      {#each Array(flowchartLineCount) as _, i}
+                        <span class="line-number">{i + 1}</span>
+                      {/each}
+                    </div>
+                    <textarea 
+                      class="er-editor" 
+                      bind:value={flowchartCode}
+                      placeholder="Mermaid Flowchart code will appear here..."
+                      on:keydown={(e) => handleMergedEditorKeydown(e, 'flowchart')}
+                      on:blur={() => handleEditorBlur('flowchart')}
+                      on:input={() => debouncedFlowchartPush(flowchartCode)}
+                      on:scroll={handleEditorScroll}
+                    ></textarea>
+                  </div>
+                 
+                 <div class="refine-actions">
+                   {#if isGeneratingFlowchart}
+                     <div class="generating-indicator">
+                        <div class="spinner-small"></div> Generating...
+                     </div>
+                   {:else}
+                    <button class="action-btn secondary" on:click={handleGenerateFlowchart}>
+                      {flowchartCode ? 'Re-generate from Refined' : 'Generate from Refined'}
+                    </button>
+                    <button class="action-btn primary" on:click={handleSaveFlowchart} disabled={!flowchartCode}>
+                      Save
+                    </button>
+                   {/if}
+                 </div>
+                 {#if flowchartError}
+                    <div class="error-msg">{flowchartError}</div>
+                 {/if}
+              </div>
+           {:else}
+              <div 
+                class="er-render-container" 
+                role="region"
+                aria-label="Flowchart Render View"
+                on:wheel={(e) => handleWheel(e, 'flowchart')}
+                on:mousedown={(e) => handleMouseDown(e, 'flowchart')}
+                on:mousemove={(e) => handleMouseMove(e, 'flowchart')}
+                on:mouseup={() => handleMouseUp('flowchart')}
+                on:mouseleave={() => handleMouseUp('flowchart')}
+                style="cursor: {isPanningFlowchart ? 'grabbing' : 'grab'};"
+              >
+                <div 
+                  class="zoom-container"
+                  style="transform: translate({flowchartPanX}px, {flowchartPanY}px) scale({flowchartZoomScale});"
+                  bind:this={flowchartContainer}
+                >
+                  <!-- Mermaid diagram rendered here -->
+                  {#if !flowchartCode}
+                    <div class="empty-state-small">
+                       <p>Generate a flowchart first.</p>
+                    </div>
+                  {/if}
+                </div>
+                
+                <div class="zoom-controls">
+                  <button class="zoom-btn" on:click={() => handleZoomIn('flowchart')} title="Zoom In">+</button>
+                  <button class="zoom-btn" on:click={() => handleZoomOut('flowchart')} title="Zoom Out">-</button>
+                  <button class="zoom-btn" on:click={() => handleResetView('flowchart')} title="Reset View">Reset</button>
                 </div>
               </div>
            {/if}
@@ -1166,6 +1500,36 @@
     border-top-color: #63b3ed;
     border-radius: 50%;
     animation: spin 1s linear infinite;
+  }
+  
+  /* Line Numbers Styles */
+  .editor-wrapper {
+    flex: 1;
+    display: flex;
+    position: relative;
+    overflow: hidden;
+    background-color: #0d1117;
+    height: 100%;
+  }
+  
+  .line-numbers {
+    padding: 1rem 0.5rem 1rem 0;
+    text-align: right;
+    background-color: #0d1117;
+    color: #4a5568;
+    border-right: 1px solid #2d3748;
+    font-family: 'Fira Code', 'Monaco', 'Consolas', monospace;
+    font-size: 0.875rem;
+    line-height: 1.6;
+    user-select: none;
+    min-width: 2.5rem;
+    overflow: hidden;
+  }
+  
+  .line-number {
+    display: block;
+    padding-right: 0.5rem;
+    color: #4a5568;
   }
 
   .empty-state-small {

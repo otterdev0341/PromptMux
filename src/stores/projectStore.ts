@@ -78,6 +78,16 @@ export async function saveProjectUmlDiagram(umlDiagram: string): Promise<void> {
   }
 }
 
+export async function saveProjectFlowchart(flowchart: string): Promise<void> {
+  try {
+    await invoke('save_project_flowchart', { flowchart });
+    await loadProject();
+  } catch (error) {
+    console.error('Failed to save project Flowchart:', error);
+    throw error;
+  }
+}
+
 export interface Project {
   id: string;
   name: string;
@@ -87,6 +97,7 @@ export interface Project {
   history?: Refinement[];
   er_diagram?: string;
   uml_diagram?: string;
+  flowchart?: string;
 }
 
 export interface Workspace {

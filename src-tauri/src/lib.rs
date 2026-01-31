@@ -47,6 +47,8 @@ pub fn run() {
             commands::refine_er_diagram_with_llm_stream,
             commands::save_project_uml_diagram,
             commands::refine_uml_diagram_with_llm_stream,
+            commands::save_project_flowchart,
+            commands::refine_flowchart_with_llm_stream,
             commands::get_llm_settings,
             commands::save_llm_settings,
             commands::get_platform,
