@@ -124,11 +124,12 @@ Create a settings file at `~/.promptmux/settings.json`:
 
 | Key | Action |
 |-----|--------|
-| `?` | Show/hide help modal |
+| `q` | Show/hide help modal |
 | `s` | Focus sidebar |
 | `e` | Focus topic editor |
 | `o` | Focus merged output pane |
 | `r` | Refine merged output with LLM |
+| `i` | Generate diagram (ER, UML, etc.) |
 
 ### Sidebar Navigation
 

@@ -71,7 +71,8 @@
 - **`Ctrl+b` then `s`** - Focus sidebar
 - **`Ctrl+b` then `e`** - Focus editor  
 - **`Ctrl+b` then `o`** - Focus merged output
-- **`Ctrl+b` then `?`** - Show help
+- **`Ctrl+b` then `i`** - Generate diagram (ER, UML, etc.)
+- **`Ctrl+b` then `q`** - Show help
 
 ### In Sidebar (when focused)
 - **`j` / `k`** - Move down/up
@@ -129,7 +130,7 @@
 
 ## Next Steps
 
-- Explore all keyboard shortcuts (`Ctrl+b ?`)
+- Explore all keyboard shortcuts (`Ctrl+b q`)
 - Set up your LLM configuration for AI refinement
 - Check out the [Z.ai Integration Guide](docs/Z_AI_SETUP.md) for using GLM models
 - Check the full README.md for advanced features
@@ -137,6 +138,6 @@
 
 ## Getting Help
 
-- Press `Ctrl+b ?` anytime to see keyboard shortcuts
+- Press `Ctrl+b q` anytime to see keyboard shortcuts
 - Check README.md for detailed documentation
 - Review example settings files in the `examples/` directory

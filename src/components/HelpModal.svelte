@@ -32,7 +32,7 @@
             <td>Create new section</td>
           </tr>
           <tr>
-            <td><kbd>?</kbd></td>
+            <td><kbd>q</kbd></td>
             <td>Show/hide this help modal</td>
           </tr>
           <tr>
@@ -46,6 +46,10 @@
           <tr>
             <td><kbd>r</kbd></td>
             <td>Refine merged output with LLM</td>
+          </tr>
+          <tr>
+            <td><kbd>i</kbd></td>
+            <td>Generate diagram (ER, UML, Flowchart, Journey)</td>
           </tr>
           <tr>
             <td><kbd>p</kbd></td>
